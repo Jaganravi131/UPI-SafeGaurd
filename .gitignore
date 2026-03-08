@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# Logs
+*.log
+logs/
+
+# ML Models (large files)
+*.h5
+*.pt
+*.pth
+*.joblib
+ml_models/
+backend/app/ml/trained_models/
+
+# Dataset files
+backend/data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vite cache
+.vite/
+
+# SQLite databases
+*.db
+
+# Sandbox data (demo JSON)
+sandbox_data/
+
+# Test coverage
+htmlcov/
+.coverage
+coverage.xml
+
+# Temp files
+*.tmp
+*.temp

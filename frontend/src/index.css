@@ -1,0 +1,269 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  
+  /* Premium CSS Variables */
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.3);
+  --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
+  --primary-glow: rgba(99, 102, 241, 0.4);
+  --success-glow: rgba(34, 197, 94, 0.4);
+  --danger-glow: rgba(239, 68, 68, 0.4);
+}
+
+body {
+  @apply min-h-screen;
+  background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 50%, #f1f5f9 100%);
+  background-attachment: fixed;
+}
+
+/* Premium Background Patterns */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(139, 92, 246, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 40% 80%, rgba(34, 211, 238, 0.05) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+@layer components {
+  /* Premium Buttons */
+  .btn-primary {
+    @apply relative overflow-hidden bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-semibold py-3.5 px-7 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-primary-500/25 active:scale-[0.98];
+  }
+  
+  .btn-primary::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 transition-opacity duration-300;
+  }
+  
+  .btn-primary:hover::before {
+    @apply opacity-100;
+  }
+  
+  .btn-danger {
+    @apply relative overflow-hidden bg-gradient-to-r from-danger-500 to-danger-600 hover:from-danger-600 hover:to-danger-700 text-white font-semibold py-3.5 px-7 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-danger-500/25 active:scale-[0.98];
+  }
+  
+  .btn-outline {
+    @apply border-2 border-primary-500 text-primary-600 hover:bg-primary-50 hover:border-primary-600 font-semibold py-3 px-6 rounded-2xl transition-all duration-300 hover:shadow-lg hover:shadow-primary-500/10;
+  }
+  
+  .btn-ghost {
+    @apply text-gray-600 hover:text-primary-600 hover:bg-primary-50/50 font-medium py-2.5 px-5 rounded-xl transition-all duration-300;
+  }
+  
+  .btn-success {
+    @apply relative overflow-hidden bg-gradient-to-r from-success-500 to-success-600 hover:from-success-600 hover:to-success-700 text-white font-semibold py-3.5 px-7 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-success-500/25 active:scale-[0.98];
+  }
+  
+  /* Premium Cards */
+  .card {
+    @apply bg-white/80 backdrop-blur-xl rounded-3xl shadow-card p-6 border border-white/50 transition-all duration-300;
+  }
+  
+  .card:hover {
+    @apply shadow-card-hover;
+  }
+  
+  .card-glass {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    @apply rounded-3xl border border-white/30 shadow-premium p-6 transition-all duration-300;
+  }
+  
+  .card-dark {
+    @apply bg-gradient-to-br from-gray-900 to-gray-800 text-white rounded-3xl shadow-premium-lg p-6 border border-gray-700/50;
+  }
+  
+  .card-gradient {
+    @apply bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 text-white rounded-3xl shadow-premium-lg p-6 relative overflow-hidden;
+  }
+  
+  .card-gradient::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-t from-transparent to-white/10;
+  }
+  
+  /* Premium Input Fields */
+  .input-field {
+    @apply w-full px-5 py-4 rounded-2xl border-2 border-gray-200/80 bg-white/60 backdrop-blur-sm focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 outline-none transition-all duration-300 text-gray-900 placeholder:text-gray-400;
+  }
+  
+  .input-field:hover {
+    @apply border-gray-300 bg-white/80;
+  }
+  
+  .input-dark {
+    @apply w-full px-5 py-4 rounded-2xl border-2 border-gray-700 bg-gray-800/80 backdrop-blur-sm focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 outline-none transition-all duration-300 text-white placeholder:text-gray-500;
+  }
+  
+  /* Risk Badges - Enhanced */
+  .risk-badge-low {
+    @apply bg-gradient-to-r from-success-100 to-success-50 text-success-700 px-4 py-1.5 rounded-full text-sm font-semibold border border-success-200/50 shadow-sm;
+  }
+  
+  .risk-badge-medium {
+    @apply bg-gradient-to-r from-warning-100 to-warning-50 text-warning-700 px-4 py-1.5 rounded-full text-sm font-semibold border border-warning-200/50 shadow-sm;
+  }
+  
+  .risk-badge-high {
+    @apply bg-gradient-to-r from-danger-100 to-danger-50 text-danger-700 px-4 py-1.5 rounded-full text-sm font-semibold border border-danger-200/50 shadow-sm;
+  }
+  
+  .risk-badge-critical {
+    @apply bg-gradient-to-r from-danger-600 to-danger-500 text-white px-4 py-1.5 rounded-full text-sm font-bold shadow-lg shadow-danger-500/30 animate-pulse;
+  }
+  
+  /* Premium Status Indicators */
+  .status-dot {
+    @apply w-2.5 h-2.5 rounded-full animate-pulse;
+  }
+  
+  .status-online {
+    @apply bg-success-500 shadow-lg shadow-success-500/50;
+  }
+  
+  .status-offline {
+    @apply bg-gray-400;
+  }
+  
+  .status-warning {
+    @apply bg-warning-500 shadow-lg shadow-warning-500/50;
+  }
+  
+  /* Premium Dividers */
+  .divider {
+    @apply h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-6;
+  }
+  
+  .divider-dark {
+    @apply h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent my-6;
+  }
+}
+
+/* Premium Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100 rounded-full;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full hover:bg-gray-400 transition-colors;
+}
+
+/* Risk score gauge animation */
+@keyframes gauge-fill {
+  from { stroke-dashoffset: 251; }
+}
+
+.gauge-circle {
+  animation: gauge-fill 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Shimmer Effect */
+.shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Glow Effects */
+.glow-primary {
+  box-shadow: 0 0 20px var(--primary-glow), 0 0 60px var(--primary-glow);
+}
+
+.glow-success {
+  box-shadow: 0 0 20px var(--success-glow), 0 0 60px var(--success-glow);
+}
+
+.glow-danger {
+  box-shadow: 0 0 20px var(--danger-glow), 0 0 60px var(--danger-glow);
+}
+
+/* Gradient Text */
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-600 via-primary-500 to-violet-500;
+}
+
+.text-gradient-success {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-success-600 to-emerald-500;
+}
+
+/* Floating Animation for Cards */
+.float-animation {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Pulse Ring Animation */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+.pulse-ring::before {
+  content: '';
+  @apply absolute inset-0 rounded-full bg-primary-500/30;
+  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Interactive Hover Effects */
+.hover-lift {
+  @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-xl;
+}
+
+.hover-scale {
+  @apply transition-transform duration-300 hover:scale-[1.02];
+}
+
+.hover-glow {
+  @apply transition-all duration-300 hover:shadow-glow;
+}
+
+/* Premium Number Animation */
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-number {
+  animation: count-up 0.5s ease-out forwards;
+}
+/* Hide Scrollbar Utility */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
