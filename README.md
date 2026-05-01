@@ -14,6 +14,10 @@
   <img src="https://img.shields.io/badge/FastAPI-0.100+-green" alt="FastAPI" />
   <img src="https://img.shields.io/badge/React-18+-61DAFB" alt="React" />
   <img src="https://img.shields.io/badge/ML%20Models-5-orange" alt="ML Models" />
+  <img src="https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white" alt="Docker" />
+  <a href="https://render.com/deploy?repo=https://github.com/Jaganravi131/UPI-SafeGaurd">
+    <img src="https://img.shields.io/badge/Deploy%20to-Render-46E3B7?logo=render&logoColor=white" alt="Deploy to Render" />
+  </a>
 </p>
 
 ---
@@ -469,20 +473,137 @@ npm test
 
 ## 🚢 Deployment
 
-### Docker Deployment
+<p align="center">
+  <a href="https://render.com/deploy?repo=https://github.com/Jaganravi131/UPI-SafeGaurd">
+    <img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" />
+  </a>
+</p>
+
+---
+
+### Option A — Docker Compose (self-hosted / VPS)
+
+The fastest way to run the full stack locally or on any Linux server.
+
+**1. Clone and configure**
 
 ```bash
-docker-compose up -d
+git clone https://github.com/Jaganravi131/UPI-SafeGaurd.git
+cd UPI-SafeGaurd
+
+# Copy the environment template and fill in your secrets
+cp .env.example .env
+nano .env   # set JWT_SECRET_KEY, ADMIN_DEFAULT_PASSWORD, GROQ_API_KEY, etc.
 ```
 
-### Cloud Options
+**2. Start all services**
+
+```bash
+docker-compose up -d --build
+```
+
+This starts:
+| Container | URL |
+|-----------|-----|
+| Frontend (nginx) | http://localhost |
+| Backend (FastAPI) | http://localhost:8000 |
+| PostgreSQL | internal only |
+| MongoDB | internal only |
+| Redis | internal only |
+
+**3. Stop everything**
+
+```bash
+docker-compose down
+# To also remove volumes (wipe data):
+docker-compose down -v
+```
+
+---
+
+### Option B — Render (recommended cloud, free tier)
+
+Render hosts both the backend (Python web service) and the frontend (static site) from a single `render.yaml` blueprint already included in this repo.
+
+**Steps:**
+
+1. Fork or push this repository to your GitHub account.
+2. Log in to [render.com](https://render.com) → **New → Blueprint**.
+3. Connect your GitHub repo — Render detects `render.yaml` automatically.
+4. In the Render dashboard, open the **upi-safeguard-backend** service → **Environment** and set the following secrets:
+
+| Variable | Value |
+|----------|-------|
+| `JWT_SECRET_KEY` | Run `python -c "import secrets; print(secrets.token_urlsafe(64))"` |
+| `ADMIN_DEFAULT_PASSWORD` | Your chosen admin password |
+| `GROQ_API_KEY` | From [console.groq.com](https://console.groq.com) |
+| `POSTGRES_URL` | Internal URL from a Render PostgreSQL database |
+| `CORS_ORIGINS` | `["https://upi-safeguard-frontend.onrender.com"]` |
+
+5. Update `render.yaml` → `VITE_API_BASE_URL` to match your backend's public URL, then push.
+6. Render will rebuild and deploy both services automatically.
+
+> **Free tier note:** Free web services on Render spin down after 15 minutes of inactivity and take ~30 s to cold-start. Upgrade to a paid plan for always-on availability.
+
+---
+
+### Option C — Vercel (frontend) + Render (backend)
+
+For the lowest frontend latency use Vercel for the React app while keeping the backend on Render.
+
+**Frontend (Vercel)**
+
+1. Import the `frontend/` folder in [vercel.com](https://vercel.com) (or connect the whole repo and set **Root Directory** to `frontend`).
+2. Set environment variable:
+   ```
+   VITE_API_BASE_URL=https://upi-safeguard-backend.onrender.com/api/v1
+   ```
+3. Build command: `npm run build` — Publish directory: `dist`.
+
+**Backend (Render)** — same as Option B above.
+
+---
+
+### Option D — Railway
+
+1. Create a new [Railway](https://railway.app) project.
+2. Add the repo and select **backend/** as the root — Railway detects Python and runs `uvicorn app.main:app`.
+3. Add a **PostgreSQL** and **Redis** plugin from the Railway marketplace.
+4. Set the same environment variables as listed in Option B.
+5. Add a second Railway service for the frontend or deploy it to Vercel (Option C).
+
+---
+
+### Required Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `JWT_SECRET_KEY` | ✅ | Random 64-byte secret for JWT signing |
+| `ADMIN_DEFAULT_PASSWORD` | ✅ | Password for the default admin account |
+| `GROQ_API_KEY` | ✅ | Groq LLM key (AI features) |
+| `POSTGRES_URL` | ⚠️ | PostgreSQL connection string (defaults to SQLite) |
+| `MONGODB_URL` | optional | MongoDB connection string |
+| `REDIS_URL` | optional | Redis connection string |
+| `CORS_ORIGINS` | ✅ prod | JSON array of allowed frontend origins |
+| `TWILIO_ACCOUNT_SID` | optional | For real SMS OTP delivery |
+| `TWILIO_AUTH_TOKEN` | optional | Twilio auth token |
+| `TWILIO_PHONE_NUMBER` | optional | Twilio sender number |
+
+Frontend build-time variable:
+
+| Variable | Description |
+|----------|-------------|
+| `VITE_API_BASE_URL` | Full URL to the backend API, e.g. `https://your-backend.onrender.com/api/v1`. Leave empty for the Vite dev proxy. |
+
+### Cloud Options Summary
 
 | Platform | Recommended For |
 |----------|-----------------|
-| **Vercel + Supabase** | Quick demo deployment |
-| **Railway** | Full-stack with databases |
-| **AWS ECS** | Production scale |
-| **Render** | Free tier available |
+| **Docker Compose** | Self-hosted / VPS / local full-stack |
+| **Render** | Free cloud tier, one-click blueprint |
+| **Vercel + Render** | Fastest frontend CDN + managed backend |
+| **Railway** | Full-stack with managed databases |
+| **AWS ECS / GCP Cloud Run** | Production scale |
 
 ---
 

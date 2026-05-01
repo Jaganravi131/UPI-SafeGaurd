@@ -18,7 +18,10 @@ const getDeviceInfo = (): string => {
 }
 
 const api = axios.create({
-  baseURL: '/api/v1',
+  // In development the Vite proxy forwards /api → localhost:8000, so the
+  // relative path works. For production builds VITE_API_BASE_URL must be set
+  // to the full backend URL (e.g. https://your-backend.onrender.com/api/v1).
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },

@@ -1,0 +1,77 @@
+# ============================================================
+# UPI SafeGuard — Render Blueprint
+# ============================================================
+# Deploy the entire stack to Render with one click.
+# https://render.com/docs/blueprint-spec
+#
+# Usage:
+#   1. Fork / push this repo to GitHub.
+#   2. Go to https://dashboard.render.com/blueprints and connect the repo.
+#   3. Render will create both services automatically.
+#   4. Set the required environment variable secrets in the Render dashboard.
+
+services:
+  # ── Backend: FastAPI web service ──────────────────────────────────────────
+  - type: web
+    name: upi-safeguard-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    plan: free          # change to 'starter' or higher for production
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      # ── Secrets (set these in the Render dashboard — do NOT commit values) ──
+      - key: JWT_SECRET_KEY
+        sync: false     # mark as secret — you will fill this in Render UI
+      - key: ADMIN_DEFAULT_PASSWORD
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      # ── Database URLs — Render-managed databases or external ───────────────
+      # Use a Render PostgreSQL database and paste the Internal Database URL:
+      - key: POSTGRES_URL
+        sync: false
+      # MongoDB Atlas / external:
+      - key: MONGODB_URL
+        sync: false
+      # Redis (Render Redis or external):
+      - key: REDIS_URL
+        sync: false
+      # ── CORS: allow the frontend static site domain ─────────────────────────
+      - key: CORS_ORIGINS
+        sync: false     # e.g. ["https://upi-safeguard.onrender.com"]
+      # ── Optional ────────────────────────────────────────────────────────────
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER
+        sync: false
+
+  # ── Frontend: Static site (Vite build) ──────────────────────────────────────
+  - type: web
+    name: upi-safeguard-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    pullRequestPreviewsEnabled: true
+    routes:
+      # SPA fallback — serve index.html for all unmatched paths
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # Point the frontend at the backend web service URL.
+      # Replace with your actual backend URL from the Render dashboard.
+      - key: VITE_API_BASE_URL
+        value: https://upi-safeguard-backend.onrender.com/api/v1
