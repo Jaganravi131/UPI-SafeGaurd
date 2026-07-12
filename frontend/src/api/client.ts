@@ -67,7 +67,7 @@ export const authAPI = {
   requestOTP: (identifier: string) => api.post('/auth/request-otp', { phone_number: identifier }),
   verifyOTP: (identifier: string, otp: string) => api.post('/auth/verify-otp', { phone_number: identifier, otp }),
   verifyFirebaseToken: (idToken: string) => api.post('/auth/verify-firebase-token', { id_token: idToken }),
-  register: (data: { phone_number: string; full_name: string; upi_id?: string; email?: string }) =>
+  register: (data: { phone_number: string; full_name: string; upi_id?: string; email?: string; firebase_uid?: string }) =>
     api.post('/auth/register', data),
   validateSession: () => api.post('/auth/validate-session'),
   logout: () => api.post('/auth/logout'),
