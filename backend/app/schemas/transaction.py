@@ -50,7 +50,7 @@ class TransactionResponse(BaseModel):
     ml_confidence: Optional[float]
     risk_factors: List[str]
     
-    # Individual model scores (5-model ensemble)
+    # Compatibility fields retained for older API clients
     xgboost_score: Optional[float] = None
     lstm_score: Optional[float] = None
     isolation_forest_score: Optional[float] = None

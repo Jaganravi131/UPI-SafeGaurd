@@ -5,7 +5,7 @@ Handles admin login, logout, and session management
 from fastapi import APIRouter, HTTPException, Depends, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from jose import jwt, JWTError
 from typing import Optional
 from uuid import UUID
@@ -38,7 +38,7 @@ def hash_password(password: str) -> str:
 def create_admin_token(data: dict) -> str:
     """Create JWT token for admin"""
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(hours=12)  # 12 hour expiry for admin
+    expire = datetime.now(timezone.utc) + timedelta(hours=12)  # 12 hour expiry for admin
     to_encode.update({"exp": expire, "type": "admin"})
     return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
@@ -168,7 +168,7 @@ async def admin_login(
         )
     
     # Update last login
-    admin.last_login = datetime.utcnow()
+    admin.last_login = datetime.now(timezone.utc)
     await db.commit()
     
     # Log activity
@@ -281,7 +281,7 @@ async def demo_admin_login(
         await db.refresh(admin)
     
     # Update last login
-    admin.last_login = datetime.utcnow()
+    admin.last_login = datetime.now(timezone.utc)
     await db.commit()
     
     # Create token

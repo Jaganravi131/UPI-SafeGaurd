@@ -30,8 +30,10 @@ logs/
 *.pt
 *.pth
 *.joblib
+!backend/app/ml/trained_models/risk_engine.joblib
 ml_models/
 backend/app/ml/trained_models/
+!backend/app/ml/trained_models/risk_engine.joblib
 
 # Dataset files
 backend/data/

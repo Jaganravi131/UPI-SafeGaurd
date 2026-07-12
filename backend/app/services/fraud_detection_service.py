@@ -3,7 +3,7 @@ Real-time Fraud Detection Service
 Core fraud detection logic for UPI transactions
 """
 from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from dataclasses import dataclass
 from enum import Enum
 import logging
@@ -200,7 +200,7 @@ class FraudDetectionService:
         Returns:
             TransactionAnalysis with risk score, alerts, and recommended action
         """
-        timestamp = timestamp or datetime.utcnow()
+        timestamp = timestamp or datetime.now(timezone.utc)
         alerts: List[FraudAlert] = []
         explanations: List[str] = []
         model_scores: Dict[str, float] = {}

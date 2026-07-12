@@ -11,7 +11,7 @@ from sqlalchemy import select, or_, func
 from ...db.excel_database import ExcelDatabase
 from ...db.database import get_db
 from ...db.models import User
-from datetime import datetime
+from datetime import datetime, timezone
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
 
@@ -100,7 +100,7 @@ async def search_contact(
             db_user = result.scalar_one_or_none()
             if db_user and db_user.upi_id:
                 bank_name = _detect_bank_from_upi(db_user.upi_id)
-                account_age = (datetime.utcnow() - db_user.created_at).days if db_user.created_at else 0
+                account_age = (datetime.now(timezone.utc) - db_user.created_at).days if db_user.created_at else 0
                 contact = {
                     'phone': clean_phone,
                     'name': db_user.full_name,
@@ -128,7 +128,7 @@ async def search_contact(
             if db_user:
                 phone_clean = (db_user.phone_number or '').replace('+91', '').replace(' ', '').strip()
                 bank_name = _detect_bank_from_upi(db_user.upi_id)
-                account_age = (datetime.utcnow() - db_user.created_at).days if db_user.created_at else 0
+                account_age = (datetime.now(timezone.utc) - db_user.created_at).days if db_user.created_at else 0
                 contact = {
                     'phone': phone_clean,
                     'name': db_user.full_name,

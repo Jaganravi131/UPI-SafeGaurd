@@ -15,7 +15,7 @@ interventions including:
 from enum import Enum
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 import uuid
 
@@ -400,7 +400,7 @@ class AIInterventionAgent:
             intervention_id=str(uuid.uuid4()),
             transaction_id=transaction_id,
             user_id=user_id,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             risk_score=risk_score,
             intervention_level=level,
             reasons=reasons,

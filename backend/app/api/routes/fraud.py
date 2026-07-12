@@ -5,7 +5,7 @@ Handles fraud reports and community fraud database
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from uuid import UUID
 from pydantic import BaseModel
@@ -382,7 +382,7 @@ async def get_trending_scams(
 ):
     """Get trending scam types"""
     # Get scam type statistics
-    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
     
     result = await db.execute(
         select(
@@ -517,7 +517,7 @@ async def upload_evidence(
             continue
         
         # Sanitize filename
-        safe_name = f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{file.filename}"
+        safe_name = f"{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{file.filename}"
         safe_name = "".join(c for c in safe_name if c.isalnum() or c in "._-")
         
         filepath = os.path.join(upload_dir, safe_name)

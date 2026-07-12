@@ -5,15 +5,12 @@ Uses Excel files as a simple database that can be easily edited by users.
 Files:
 - contacts.xlsx: Phone to UPI mappings
 - known_scammers.xlsx: Known fraudulent UPI IDs
-- demo_wallets.xlsx: Demo wallet balances
 """
 import os
 import pandas as pd
 from pathlib import Path
 from typing import Optional, Dict, List, Any
 from datetime import datetime
-import hashlib
-import secrets
 import uuid
 
 # Get the data directory
@@ -23,21 +20,7 @@ DATA_DIR.mkdir(exist_ok=True)
 # Excel file paths
 CONTACTS_FILE = DATA_DIR / "contacts.xlsx"
 SCAMMERS_FILE = DATA_DIR / "known_scammers.xlsx"
-WALLETS_FILE = DATA_DIR / "demo_wallets.xlsx"
 TRANSACTIONS_FILE = DATA_DIR / "transactions.xlsx"
-
-# Fixed salt for demo UPI PINs (in production, use per-user random salts)
-_PIN_SALT = "upi_safeguard_pin_salt_2025"
-
-
-def _hash_pin(pin: str) -> str:
-    """Hash a UPI PIN with a fixed salt using SHA-256"""
-    return hashlib.sha256((_PIN_SALT + pin).encode()).hexdigest()
-
-
-def _verify_pin(pin: str, pin_hash: str) -> bool:
-    """Verify a UPI PIN against its hash"""
-    return hashlib.sha256((_PIN_SALT + pin).encode()).hexdigest() == pin_hash
 
 
 def init_excel_databases():
@@ -114,22 +97,7 @@ def init_excel_databases():
         df.to_excel(SCAMMERS_FILE, index=False, sheet_name='Scammers')
         print(f"✅ Created scammers database: {SCAMMERS_FILE}")
     
-    # 3. Demo Wallets (for realistic balance)
-    if not WALLETS_FILE.exists() or WALLETS_FILE.stat().st_size < 100:
-        wallets_data = {
-            'user_id': ['demo-user-1', 'demo-user-2', 'demo-user-3'],
-            'phone': ['9876543210', '9876543211', '9876543212'],
-            'balance': [50000.00, 25000.00, 75000.00],
-            'daily_limit': [100000.00, 100000.00, 100000.00],
-            'spent_today': [0.00, 0.00, 0.00],
-            'upi_pin_hash': [_hash_pin('1234'), _hash_pin('5678'), _hash_pin('9012')],
-            'last_transaction': ['', '', '']
-        }
-        df = pd.DataFrame(wallets_data)
-        df.to_excel(WALLETS_FILE, index=False, sheet_name='Wallets')
-        print(f"✅ Created wallets database: {WALLETS_FILE}")
-    
-    # 4. Transactions Log
+    # 3. Transactions Log
     if not TRANSACTIONS_FILE.exists() or TRANSACTIONS_FILE.stat().st_size < 100:
         transactions_data = {
             'txn_id': [],
@@ -238,52 +206,6 @@ class ExcelDatabase:
         except Exception as e:
             print(f"Error reading scammers: {e}")
         return None
-    
-    @staticmethod
-    def get_wallet(phone: str) -> Optional[Dict]:
-        """Get wallet balance for user"""
-        phone = phone.replace('+91', '').replace(' ', '').strip()
-        try:
-            df = pd.read_excel(WALLETS_FILE)
-            match = df[df['phone'].astype(str) == phone]
-            if not match.empty:
-                row = match.iloc[0]
-                return {
-                    'user_id': row['user_id'],
-                    'phone': str(row['phone']),
-                    'balance': float(row['balance']),
-                    'daily_limit': float(row['daily_limit']),
-                    'spent_today': float(row['spent_today']),
-                    'upi_pin_hash': str(row['upi_pin_hash'])
-                }
-        except Exception as e:
-            print(f"Error reading wallets: {e}")
-        return None
-    
-    @staticmethod
-    def update_wallet_balance(phone: str, new_balance: float, spent: float) -> bool:
-        """Update wallet balance after transaction"""
-        phone = phone.replace('+91', '').replace(' ', '').strip()
-        try:
-            df = pd.read_excel(WALLETS_FILE)
-            idx = df[df['phone'].astype(str) == phone].index
-            if not idx.empty:
-                df.loc[idx[0], 'balance'] = new_balance
-                df.loc[idx[0], 'spent_today'] = spent
-                df.loc[idx[0], 'last_transaction'] = datetime.now().isoformat()
-                df.to_excel(WALLETS_FILE, index=False, sheet_name='Wallets')
-                return True
-        except Exception as e:
-            print(f"Error updating wallet: {e}")
-        return False
-
-    @staticmethod
-    def verify_upi_pin(phone: str, pin: str) -> bool:
-        """Verify UPI PIN against hash stored in wallet"""
-        wallet = ExcelDatabase.get_wallet(phone)
-        if not wallet or not wallet.get('upi_pin_hash'):
-            return False
-        return _verify_pin(pin, wallet['upi_pin_hash'])
     
     @staticmethod
     def log_transaction(txn_data: Dict) -> bool:

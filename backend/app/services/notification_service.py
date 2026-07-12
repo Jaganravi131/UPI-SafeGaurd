@@ -3,7 +3,7 @@ Notification Service
 Handles alerts, notifications, and voice alerts
 """
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 import asyncio
 
@@ -35,7 +35,7 @@ class NotificationService:
             "message": message,
             "data": data or {},
             "read": False,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         
         if user_id not in self.notifications:

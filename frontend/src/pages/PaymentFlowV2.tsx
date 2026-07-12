@@ -41,7 +41,7 @@ import { useKillSwitch, KillSwitchAlert } from '../components/KillSwitch'
 import AIInterventionModal, { AIIntervention } from '../components/AIInterventionModal'
 import QRScanner from '../components/QRScanner'
 import MyQRCode from '../components/MyQRCode'
-import { transactionAPI, contactsAPI, securityAPI, walletAPI, interventionAPI, aiAPI } from '../api/client'
+import { transactionAPI, contactsAPI, walletAPI, interventionAPI, aiAPI } from '../api/client'
 import { useAuthStore, useUIStore } from '../store'
 import { useTranslation } from '../contexts/TranslationContext'
 import { generateNCRPReport } from '../utils/generateNCRPReport'
@@ -143,7 +143,7 @@ export default function PaymentFlowV2() {
   const [isProcessing, setIsProcessing] = useState(false)
   // Risk token from /assess-risk (replay protection)
   const [riskToken, setRiskToken] = useState<string | null>(null)
-  // ML ensemble scores from /assess-risk
+  // Risk model component scores from /assess-risk
   const [mlScores, setMlScores] = useState<{
     ensemble_score?: number
     xgboost_score?: number
@@ -401,48 +401,105 @@ export default function PaymentFlowV2() {
     }
 
     try {
-      // Fire BOTH API calls + animation in parallel for minimum latency
-      const securityPromise = securityAPI.analyze({
-        upi_id: upiId,
-        amount: parseFloat(amount),
-        user_id: user?.id,
-        note: note,
-        environment: {
-          screen_recording: threats.some(t => t.type === 'screen_recording'),
-          screen_sharing: threats.some(t => t.type === 'screen_sharing'),
-          overlay_detected: threats.some(t => t.type === 'overlay'),
-          device_rooted: false,
-        },
-      })
-
-      // Start risk assessment in parallel with security analysis (don't wait)
-      const riskTokenPromise = transactionAPI.assessRisk({
-        recipient_upi: upiId,
-        amount: parseFloat(amount),
-        note: note,
-        call_active: isOnCall,
-      }).then(riskRes => {
-        if (riskRes.data?.risk_token) setRiskToken(riskRes.data.risk_token)
-        // Store individual ML model scores for ensemble breakdown display
-        setMlScores({
-          ensemble_score: riskRes.data?.ensemble_score,
-          xgboost_score: riskRes.data?.xgboost_score,
-          lstm_score: riskRes.data?.lstm_score,
-          isolation_forest_score: riskRes.data?.isolation_forest_score,
-          gnn_score: riskRes.data?.gnn_score,
-          sensor_score: riskRes.data?.sensor_score,
-          model_versions: riskRes.data?.model_versions,
-        })
-      }).catch(() => { /* Non-fatal */ })
-
       // Animate through layers
       for (let i = 0; i < 7; i++) {
         await animateLayer(i)
       }
 
-      const { data } = await securityPromise
-      setLayerResults(data.layer_summary)
-      setSecurityAnalysis(data)
+      const { data } = await transactionAPI.assessRisk({
+        recipient_upi: upiId,
+        amount: parseFloat(amount),
+        note: note,
+        call_active: isOnCall,
+      })
+
+      const rawScore = Number(data?.ensemble_score ?? 0)
+      const normalizedScore = Math.max(0, Math.min(1, rawScore))
+      const finalScore = normalizedScore * 100
+      const backendRiskLevel = String(data?.risk_level || 'low').toLowerCase()
+      const riskLabelMap: Record<string, string> = {
+        low: 'Low Risk',
+        medium: 'Medium Risk',
+        high: 'High Risk',
+        critical: 'Critical Risk',
+      }
+      const riskColorMap: Record<string, 'green' | 'yellow' | 'orange' | 'red'> = {
+        low: 'green',
+        medium: 'yellow',
+        high: 'orange',
+        critical: 'red',
+      }
+      const reviewRiskLevelMap: Record<string, 'safe' | 'caution' | 'risky' | 'dangerous'> = {
+        low: 'safe',
+        medium: 'caution',
+        high: 'risky',
+        critical: 'dangerous',
+      }
+
+      const riskColor = riskColorMap[backendRiskLevel] || 'yellow'
+      const riskLevelLabel = riskLabelMap[backendRiskLevel] || 'Medium Risk'
+      const reviewRiskLevel = reviewRiskLevelMap[backendRiskLevel] || 'caution'
+      const recommendedAction = String(data?.recommended_action || 'allow').toLowerCase()
+      const riskFactors: string[] = Array.isArray(data?.risk_factors) && data.risk_factors.length
+        ? data.risk_factors
+        : ['No major fraud indicators detected.']
+
+      const tipsByRisk: Record<string, string[]> = {
+        low: ['Confirm recipient name and UPI ID before sending.'],
+        medium: ['Verify recipient details once more before proceeding.', 'Avoid rushed payments during active phone calls.'],
+        high: ['Call the recipient on a trusted number to verify the request.', 'Do not share OTP/PIN or approve unknown collect requests.'],
+        critical: ['Do not proceed with this payment.', 'Report suspicious behavior immediately from the fraud report page.'],
+      }
+
+      const syntheticLayerSummary: LayerResult[] = SECURITY_LAYERS.map((layer, index) => {
+        let status: 'safe' | 'warning' | 'danger' = 'safe'
+        if (index === 4 || index === 6) {
+          status = riskColor === 'red' ? 'danger' : riskColor === 'orange' || riskColor === 'yellow' ? 'warning' : 'safe'
+        }
+        return {
+          name: layer.name,
+          passed: status !== 'danger',
+          score: Math.max(0, Math.min(100, finalScore)),
+          status,
+          icon: status === 'safe' ? 'check' : status === 'warning' ? 'alert' : 'block',
+        }
+      })
+
+      const mappedAnalysis: SecurityAnalysis = {
+        transaction_id: String(data?.transaction_id || crypto.randomUUID()),
+        risk_level: reviewRiskLevel,
+        risk_level_label: riskLevelLabel,
+        final_score: finalScore,
+        is_blocked: recommendedAction === 'block',
+        can_proceed: recommendedAction !== 'block',
+        risk_color: riskColor,
+        risk_icon: riskColor,
+        primary_reason: riskFactors[0],
+        all_reasons: riskFactors,
+        safety_tips: tipsByRisk[backendRiskLevel] || tipsByRisk.medium,
+        scam_type_detected: null,
+        scam_type_label: null,
+        education_link: null,
+        layer_summary: syntheticLayerSummary,
+      }
+
+      if (data?.risk_token) {
+        setRiskToken(data.risk_token)
+      } else {
+        throw new Error('Risk token missing from assess-risk response')
+      }
+
+      setMlScores({
+        ensemble_score: data?.ensemble_score,
+        xgboost_score: data?.xgboost_score,
+        lstm_score: data?.lstm_score,
+        isolation_forest_score: data?.isolation_forest_score,
+        gnn_score: data?.gnn_score,
+        sensor_score: data?.sensor_score,
+        model_versions: data?.model_versions,
+      })
+      setLayerResults(mappedAnalysis.layer_summary)
+      setSecurityAnalysis(mappedAnalysis)
 
       // Voice alert (fire-and-forget, don't block review)
       const voicePromise = (async () => {
@@ -495,7 +552,6 @@ export default function PaymentFlowV2() {
       })()
 
       // Wait for risk token (critical for payment), then show review
-      await riskTokenPromise
       setStep('review')
       
       // Voice & translation continue in background — don't block review

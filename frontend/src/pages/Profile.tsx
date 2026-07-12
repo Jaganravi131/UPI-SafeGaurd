@@ -28,9 +28,9 @@ export default function Profile() {
       try {
         const [lbRes, txRes, badgeRes, historyRes] = await Promise.all([
           challengeAPI.getLeaderboard().catch(() => ({ data: null })),
-          transactionAPI.getHistory(0, 1).catch(() => ({ data: { total: 0 } })),
+          transactionAPI.getHistory(1, 1).catch(() => ({ data: { total: 0 } })),
           challengeAPI.getBadges().catch(() => ({ data: { badges: [] } })),
-          transactionAPI.getHistory(0, 5).catch(() => ({ data: { transactions: [] } })),
+          transactionAPI.getHistory(1, 5).catch(() => ({ data: { transactions: [] } })),
         ])
         setLeaderboard(lbRes.data)
         setTxCount(txRes.data?.total ?? 0)

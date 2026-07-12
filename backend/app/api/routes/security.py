@@ -6,7 +6,7 @@ Security Shield API Routes
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -136,7 +136,7 @@ async def analyze_transaction(request: AnalyzeRequest, db: AsyncSession = Depend
                         "avg_transaction_amount": sum(amounts) / len(amounts) if amounts else 0.0,
                         "max_transaction_amount": max(amounts) if amounts else 0.0,
                         "transaction_count": len(transactions),
-                        "account_age_days": (datetime.utcnow() - user.created_at).days if user.created_at else 0,
+                        "account_age_days": (datetime.now(timezone.utc) - user.created_at).days if user.created_at else 0,
                         "security_score": int(user.security_score or 50),
                     }
             except Exception:

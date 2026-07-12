@@ -12,7 +12,7 @@ This is a LOCAL sandbox - no real money involved!
 """
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
 from uuid import uuid4
 import random
@@ -64,8 +64,8 @@ async def initialize_wallet(user_id: str, phone_number: str, initial_balance: fl
         "bank_name": "SafeGuard Sandbox Bank",
         "account_number": f"SBSB{random.randint(100000000, 999999999)}",
         "ifsc_code": "SBSB0001234",
-        "created_at": datetime.utcnow().isoformat(),
-        "last_updated": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "last_updated": datetime.now(timezone.utc).isoformat(),
     }
     
     wallets[user_id] = wallet
@@ -148,7 +148,7 @@ async def update_balance(user_id: str, amount: float, operation: str = "debit") 
     else:  # credit
         wallets[user_id]["balance"] += amount
     
-    wallets[user_id]["last_updated"] = datetime.utcnow().isoformat()
+    wallets[user_id]["last_updated"] = datetime.now(timezone.utc).isoformat()
     _save_json(WALLETS_FILE, wallets)
     
     return wallets[user_id]
@@ -186,7 +186,7 @@ async def add_transaction(
         "status": status,
         "risk_score": risk_score,
         "is_flagged": is_flagged,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "reference_id": f"TXN{random.randint(100000000000, 999999999999)}",
     }
     
@@ -331,7 +331,7 @@ async def create_demo_account():
             "status": "completed",
             "risk_score": txn_data["risk"],
             "is_flagged": txn_data["risk"] > 50,
-            "timestamp": (datetime.utcnow() - timedelta(days=days_ago)).isoformat(),
+            "timestamp": (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat(),
             "reference_id": f"TXN{random.randint(100000000000, 999999999999)}",
         }
         transactions[demo_user_id].append(txn)

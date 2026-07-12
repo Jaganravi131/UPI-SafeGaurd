@@ -3,10 +3,9 @@ Risk Assessment Service
 Orchestrates ML models for transaction risk assessment
 """
 from typing import Dict, Any, Optional
-from datetime import datetime
-from uuid import UUID
+from fastapi import Request
 
-from app.ml.pipeline import get_model_inference, ModelInference
+from app.ml.pipeline.risk_adapter import RiskAdapter
 from app.db.database import get_mongodb
 from app.db.mongodb_models import MLFeaturesDocument
 
@@ -14,8 +13,8 @@ from app.db.mongodb_models import MLFeaturesDocument
 class RiskAssessmentService:
     """Service for assessing transaction risk using ML models"""
     
-    def __init__(self):
-        self.model_inference: ModelInference = get_model_inference()
+    def __init__(self, risk_adapter: RiskAdapter):
+        self.risk_adapter = risk_adapter
     
     async def assess_transaction(
         self,
@@ -36,13 +35,14 @@ class RiskAssessmentService:
         Returns:
             Risk assessment result with scores and recommendations
         """
-        # Run ML assessment
-        result = await self.model_inference.assess_risk(
+        # Run engine assessment
+        result = self.risk_adapter.assess(
             transaction_data,
             user_profile,
             recipient_profile,
-            sensor_data
         )
+        if sensor_data:
+            result["sensor_score"] = float(sensor_data.get("stress_score", result.get("sensor_score", 0.0)))
         
         # Log ML features to MongoDB
         await self._log_ml_features(
@@ -70,11 +70,9 @@ class RiskAssessmentService:
                 user_id=user_id,
                 features={},  # Would include extracted features
                 model_outputs={
-                    "xgboost": {"score": result.get("xgboost_score", 0)},
-                    "lstm": {"score": result.get("lstm_score", 0)},
                     "isolation_forest": {"score": result.get("isolation_forest_score", 0)},
                     "gnn": {"score": result.get("gnn_score", 0)},
-                    "sensor": {"score": result.get("sensor_score", 0)},
+                    "risk_engine": {"score": result.get("ensemble_score", 0)},
                 },
                 ensemble_score=result.get("ensemble_score", 0),
                 risk_level=result.get("risk_level", "low"),
@@ -91,20 +89,20 @@ class RiskAssessmentService:
         transaction: Dict[str, Any]
     ):
         """Update user's behavioral profile after transaction"""
-        self.model_inference.update_user_profile(user_id, transaction)
+        self.risk_adapter.engine.update_user_profile(user_id, transaction)
     
     def report_fraud(self, upi_id: str, report_count: int = 1):
         """Add fraud report to graph network"""
-        self.model_inference.add_fraud_report(upi_id, report_count)
+        self.risk_adapter.engine.add_fraud_report(upi_id, report_count)
     
     def record_transaction_graph(self, from_upi: str, to_upi: str):
         """Record transaction in graph for network analysis"""
-        self.model_inference.record_transaction(from_upi, to_upi)
+        self.risk_adapter.engine.record_transaction(from_upi, to_upi)
     
     def check_recipient_safety(self, upi_id: str) -> Dict[str, Any]:
         """Quick safety check for a recipient UPI ID"""
-        gnn_score, details = self.model_inference.gnn.analyze_node(upi_id)
-        patterns = self.model_inference.gnn.get_suspicious_patterns(upi_id)
+        gnn_score, details = self.risk_adapter.engine.gnn.analyze_node(upi_id)
+        patterns = self.risk_adapter.engine.gnn.get_suspicious_patterns(upi_id)
         
         # Determine trust level
         if gnn_score > 0.85:
@@ -134,13 +132,9 @@ class RiskAssessmentService:
         }
 
 
-# Singleton instance
-_service_instance: Optional[RiskAssessmentService] = None
-
-
-def get_risk_assessment_service() -> RiskAssessmentService:
-    """Get or create risk assessment service instance"""
-    global _service_instance
-    if _service_instance is None:
-        _service_instance = RiskAssessmentService()
-    return _service_instance
+def get_risk_assessment_service(request: Request) -> RiskAssessmentService:
+    """FastAPI dependency that resolves the app-state RiskAdapter."""
+    risk_adapter = getattr(request.app.state, "risk_adapter", None)
+    if risk_adapter is None:
+        raise RuntimeError("Risk engine has not been loaded into app state.")
+    return RiskAssessmentService(risk_adapter)

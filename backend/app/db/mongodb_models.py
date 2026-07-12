@@ -1,7 +1,7 @@
 """
 MongoDB schemas for behavioral logs and ML features
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional, Any
 
 
@@ -140,14 +140,14 @@ class BehavioralLogDocument:
         """Create a behavioral log document"""
         return {
             "user_id": user_id,
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.now(timezone.utc),
             "transaction_id": transaction_id,
             "amount": amount,
             "recipient_upi": recipient_upi,
             "is_new_recipient": kwargs.get("is_new_recipient", True),
-            "hour_of_day": datetime.utcnow().hour,
-            "day_of_week": datetime.utcnow().weekday(),
-            "is_weekend": datetime.utcnow().weekday() >= 5,
+            "hour_of_day": datetime.now(timezone.utc).hour,
+            "day_of_week": datetime.now(timezone.utc).weekday(),
+            "is_weekend": datetime.now(timezone.utc).weekday() >= 5,
             "time_since_last_transaction": kwargs.get("time_since_last", 0),
             "transactions_in_last_hour": kwargs.get("txn_last_hour", 0),
             "transactions_in_last_day": kwargs.get("txn_last_day", 0),
@@ -177,7 +177,7 @@ class MLFeaturesDocument:
         return {
             "transaction_id": transaction_id,
             "user_id": user_id,
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.now(timezone.utc),
             "features": features,
             "xgboost_output": model_outputs.get("xgboost", {}),
             "lstm_output": model_outputs.get("lstm", {}),

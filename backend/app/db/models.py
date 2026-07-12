@@ -5,7 +5,7 @@ from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Foreig
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.types import CHAR
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import enum
 
@@ -129,12 +129,13 @@ class User(Base):
     firebase_uid = Column(String(128), nullable=True, unique=True)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     last_login = Column(DateTime, nullable=True)
     
     # Relationships
     transactions = relationship("Transaction", back_populates="user")
+    wallet = relationship("Wallet", back_populates="user", uselist=False, cascade="all, delete-orphan")
     guardians = relationship("Guardian", foreign_keys="[Guardian.user_id]", back_populates="user")
     challenge_progress = relationship("ChallengeProgress", back_populates="user")
     
@@ -151,7 +152,7 @@ class Guardian(Base):
     relation_type = Column(String(50), nullable=False)  # renamed from 'relationship'
     status = Column(String(20), default="pending")  # pending, active, declined
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     user = relationship("User", foreign_keys="[Guardian.user_id]", back_populates="guardians")
 
@@ -198,13 +199,29 @@ class Transaction(Base):
     coercion_detected = Column(Boolean, default=False)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime, nullable=True)
     
     # Feedback for ML training
     reported_as_fraud = Column(Boolean, nullable=True)
     
     user = relationship("User", back_populates="transactions")
+
+
+class Wallet(Base):
+    """Single source of truth for user wallet balances"""
+    __tablename__ = "wallets"
+
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    user_id = Column(GUID(), ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    balance = Column(Numeric(12, 2), default=0.0, nullable=False)
+    daily_limit = Column(Numeric(12, 2), default=100000.0, nullable=False)
+    daily_spent = Column(Numeric(12, 2), default=0.0, nullable=False)
+    currency = Column(String(3), default="INR", nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    user = relationship("User", back_populates="wallet")
 
 
 class FraudReport(Base):
@@ -232,8 +249,8 @@ class FraudReport(Base):
     # Impact tracking
     users_protected = Column(Integer, default=0)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class Challenge(Base):
@@ -250,7 +267,7 @@ class Challenge(Base):
     explanation = Column(Text, nullable=False)
     points = Column(Integer, default=10)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class ChallengeProgress(Base):
@@ -296,8 +313,8 @@ class UPIProfile(Base):
     connected_accounts = Column(Integer, default=0)
     flagged_connections = Column(Integer, default=0)
     
-    last_updated = Column(DateTime, default=datetime.utcnow)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class Notification(Base):
@@ -314,7 +331,7 @@ class Notification(Base):
     
     read = Column(Boolean, default=False)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class AdminRole(enum.Enum):
@@ -341,8 +358,8 @@ class Admin(Base):
     last_login = Column(DateTime, nullable=True)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class ActivityLog(Base):
@@ -359,4 +376,4 @@ class ActivityLog(Base):
     details = Column(JSONType(), default=dict)
     ip_address = Column(String(45), nullable=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

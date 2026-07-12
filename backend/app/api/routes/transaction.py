@@ -5,7 +5,7 @@ Handles payments, risk assessment, and transaction history
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from uuid import UUID, uuid4
 import asyncio
@@ -16,13 +16,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 from app.db.database import get_db
-from app.db.models import Transaction, User, UPIProfile, TransactionStatus, RiskLevel as DBRiskLevel
+from app.db.models import Transaction, User, UPIProfile, Wallet, TransactionStatus, RiskLevel as DBRiskLevel
 from app.api.deps import get_current_user_id
 from app.schemas import (
     TransactionCreate, TransactionRequest, TransactionResponse,
     TransactionHistory, RecipientCheckRequest, RecipientCheckResponse
 )
-from app.services import get_risk_assessment_service, get_notification_service
+from app.services import get_notification_service
+from app.services.risk_assessment_service import RiskAssessmentService, get_risk_assessment_service
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
 
@@ -126,7 +127,7 @@ async def get_user_profile(user_id: str, db: AsyncSession) -> dict:
         "guardian_enabled": user.guardian_enabled,
         "guardian_threshold": float(user.guardian_threshold or 5000),
         "typical_hours": typical_hours,
-        "age": (datetime.utcnow() - user.date_of_birth).days // 365 if user.date_of_birth else 30,
+        "age": (datetime.now(timezone.utc) - user.date_of_birth).days // 365 if user.date_of_birth else 30,
         "is_vulnerable": user.digital_literacy == "beginner",
     }
 
@@ -159,11 +160,30 @@ async def get_recipient_profile(upi_id: str, db: AsyncSession) -> dict:
     }
 
 
+async def _ensure_wallet_for_user(db: AsyncSession, user: User) -> Wallet:
+    """Create a wallet for the user when one is missing."""
+    result = await db.execute(select(Wallet).where(Wallet.user_id == user.id))
+    wallet = result.scalar_one_or_none()
+    if wallet:
+        return wallet
+
+    wallet = Wallet(
+        user_id=user.id,
+        balance=10000.0,
+        daily_limit=float(user.daily_limit or 100000.0),
+        daily_spent=0.0,
+    )
+    db.add(wallet)
+    await db.flush()
+    return wallet
+
+
 @router.post("/assess-risk")
 async def assess_transaction_risk(
     request: TransactionRequest,
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_current_user_id),
+    risk_service: RiskAssessmentService = Depends(get_risk_assessment_service)
 ):
     """Assess risk of a transaction before processing"""
     
@@ -172,8 +192,8 @@ async def assess_transaction_risk(
     recipient_profile = await get_recipient_profile(request.recipient_upi, db)
 
     # New recipient check + recent transaction stats in minimal queries
-    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
-    one_day_ago = datetime.utcnow() - timedelta(days=1)
+    one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+    one_day_ago = datetime.now(timezone.utc) - timedelta(days=1)
 
     recent_result = await db.execute(
         select(Transaction)
@@ -204,15 +224,14 @@ async def assess_transaction_risk(
         "amount": request.amount,
         "purpose": request.purpose,
         "is_new_recipient": is_new_recipient,
-        "hour_of_day": datetime.utcnow().hour,
-        "day_of_week": datetime.utcnow().weekday(),
+        "hour_of_day": datetime.now(timezone.utc).hour,
+        "day_of_week": datetime.now(timezone.utc).weekday(),
         "transactions_last_hour": transactions_last_hour,
         "transactions_last_day": transactions_last_day,
         "call_active": request.call_active,
     }
     
     # Run ML risk assessment
-    risk_service = get_risk_assessment_service()
     result = await risk_service.assess_transaction(
         transaction_data,
         user_profile,
@@ -256,9 +275,19 @@ async def assess_transaction_risk(
 async def create_transaction(
     request: TransactionCreate,
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_current_user_id),
+    risk_service: RiskAssessmentService = Depends(get_risk_assessment_service)
 ):
     """Create and process a transaction"""
+
+    if not isinstance(risk_service, RiskAssessmentService):
+        try:
+            risk_service = get_risk_assessment_service()
+        except TypeError:
+            from app.ml.pipeline.risk_adapter import RiskAdapter
+            from app.ml.risk_engine import RiskEngine
+
+            risk_service = RiskAssessmentService(RiskAdapter(RiskEngine()))
     
     # ── Replay protection: if a risk_token is provided, reuse its assessment ──
     if request.risk_token:
@@ -275,10 +304,9 @@ async def create_transaction(
             "recipient_upi": request.recipient_upi,
             "amount": request.amount,
             "is_new_recipient": True,
-            "hour_of_day": datetime.utcnow().hour,
-            "day_of_week": datetime.utcnow().weekday(),
+            "hour_of_day": datetime.now(timezone.utc).hour,
+            "day_of_week": datetime.now(timezone.utc).weekday(),
         }
-        risk_service = get_risk_assessment_service()
         risk_result = await risk_service.assess_transaction(
             transaction_data, user_profile, recipient_profile, request.sensor_data
         )
@@ -286,8 +314,6 @@ async def create_transaction(
     # NOTE: delay_seconds is returned to the frontend for UI display only.
     # No server-side sleep — the review step already serves as a friction delay.
 
-    risk_service = get_risk_assessment_service()
-    
     # Determine status based on risk
     risk_level_map = {
         "low": DBRiskLevel.LOW,
@@ -297,56 +323,54 @@ async def create_transaction(
     }
     
     if risk_result["recommended_action"] == "block":
-        status = TransactionStatus.BLOCKED
+        txn_status = TransactionStatus.BLOCKED
     elif risk_result["require_guardian_approval"]:
-        status = TransactionStatus.GUARDIAN_PENDING
+        txn_status = TransactionStatus.GUARDIAN_PENDING
     else:
-        status = TransactionStatus.COMPLETED
-    
-    # Create transaction record
+        txn_status = TransactionStatus.COMPLETED
+
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    wallet = await _ensure_wallet_for_user(db, user)
+
+    if txn_status == TransactionStatus.COMPLETED:
+        current_balance = float(wallet.balance or 0)
+        if current_balance < float(request.amount):
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Insufficient wallet balance",
+            )
+        wallet.balance = current_balance - float(request.amount)
+        wallet.daily_spent = float(wallet.daily_spent or 0) + float(request.amount)
+
     transaction = Transaction(
         user_id=user_id,
         recipient_upi=request.recipient_upi,
         amount=request.amount,
         purpose=request.purpose,
-        status=status,
+        status=txn_status,
         risk_level=risk_level_map.get(risk_result["risk_level"], DBRiskLevel.LOW),
         risk_score=risk_result["ensemble_score"],
-        xgboost_score=risk_result.get("xgboost_score"),
-        lstm_score=risk_result.get("lstm_score"),
+        xgboost_score=None,
+        lstm_score=None,
         isolation_forest_score=risk_result.get("isolation_forest_score"),
         gnn_score=risk_result.get("gnn_score"),
         ml_confidence=risk_result.get("confidence"),
         risk_factors=risk_result.get("risk_factors", []),
         delay_applied=risk_result.get("delay_seconds", 0),
-        completed_at=datetime.utcnow() if status == TransactionStatus.COMPLETED else None
+        completed_at=datetime.now(timezone.utc) if txn_status == TransactionStatus.COMPLETED else None,
     )
-    
+
     db.add(transaction)
     await db.commit()
     await db.refresh(transaction)
-    
-    # Update sandbox wallet balance for completed transactions
-    if status == TransactionStatus.COMPLETED:
-        try:
-            from app.services.sandbox_bank import transfer_money as sandbox_transfer, get_wallet
-            wallet = await get_wallet(user_id)
-            if wallet:
-                sender_upi = wallet.get("upi_id", f"{user_id}@upisafeguard")
-                await sandbox_transfer(
-                    sender_user_id=user_id,
-                    sender_upi=sender_upi,
-                    recipient_upi=request.recipient_upi,
-                    amount=float(request.amount),
-                    note=request.purpose or f"Payment to {request.recipient_upi}",
-                    risk_score=risk_result["ensemble_score"] * 100
-                )
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Sandbox balance update failed: {e}")
 
     # Notify guardians for high-risk / guardian-pending transactions
-    if status == TransactionStatus.GUARDIAN_PENDING:
+    if txn_status == TransactionStatus.GUARDIAN_PENDING:
         try:
             from app.api.routes.guardian import notify_guardians_of_transaction
             await notify_guardians_of_transaction(
@@ -363,7 +387,7 @@ async def create_transaction(
             logger.warning("Guardian notification failed: %s", e)
     
     # Update graph network
-    if status == TransactionStatus.COMPLETED:
+    if txn_status == TransactionStatus.COMPLETED:
         risk_service.record_transaction_graph(
             f"{user_id}@upi",
             request.recipient_upi
@@ -380,8 +404,8 @@ async def create_transaction(
         risk_score=transaction.risk_score,
         ml_confidence=transaction.ml_confidence,
         risk_factors=transaction.risk_factors,
-        xgboost_score=transaction.xgboost_score,
-        lstm_score=transaction.lstm_score,
+        xgboost_score=None,
+        lstm_score=None,
         isolation_forest_score=transaction.isolation_forest_score,
         gnn_score=transaction.gnn_score,
         sensor_score=risk_result.get("sensor_score"),
@@ -442,8 +466,8 @@ async def get_transaction_history(
                 risk_score=t.risk_score,
                 ml_confidence=t.ml_confidence,
                 risk_factors=t.risk_factors or [],
-                xgboost_score=t.xgboost_score,
-                lstm_score=t.lstm_score,
+                xgboost_score=None,
+                lstm_score=None,
                 isolation_forest_score=t.isolation_forest_score,
                 gnn_score=t.gnn_score,
                 created_at=t.created_at,

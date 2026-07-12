@@ -96,7 +96,7 @@ export default function Dashboard() {
       
       try {
         if (user?.id) {
-          const txRes = await transactionAPI.getHistory(0, 10)
+          const txRes = await transactionAPI.getHistory(1, 10)
           const txns = txRes.data?.transactions || txRes.data || []
           const blocked = txns
             .filter((t: any) => t.status === 'blocked' || (t.risk_score && t.risk_score > 70))

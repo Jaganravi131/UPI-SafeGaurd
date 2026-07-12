@@ -5,38 +5,28 @@ Includes single-device session management
 """
 from fastapi import APIRouter, HTTPException, Depends, status, Header
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
-from datetime import datetime, timedelta
+from sqlalchemy import select
+from datetime import datetime, timezone, timedelta
 from jose import jwt, JWTError
-import random
-import string
 import uuid
 from typing import Optional
 
 from app.db.database import get_db
-from app.db.models import User, UserLiteracy
+from app.db.models import User, UserLiteracy, Wallet
 from app.schemas import (
     UserCreate, UserLogin, UserResponse, TokenResponse,
     OTPRequest, OTPVerify
 )
 from app.config import settings
-from app.services.sms_service import send_otp_sms, is_demo_number, format_phone_display
+from app.services.sms_service import format_phone_display
+from app.services.otp import request_otp as issue_otp_code, verify_otp as confirm_otp_code
 from app.api.deps import get_current_user_id as get_current_user_id_dep
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-# In-memory OTP store (use Redis in production)
-otp_store: dict = {}
-
 # Session store - tracks active sessions per user
 # Key: user_id, Value: {"session_id": str, "device_info": str, "created_at": datetime}
 active_sessions: dict = {}
-
-
-def generate_otp() -> str:
-    """Generate 6-digit OTP"""
-    return ''.join(random.choices(string.digits, k=6))
-
 
 def generate_session_id() -> str:
     """Generate unique session ID"""
@@ -46,7 +36,7 @@ def generate_session_id() -> str:
 def create_access_token(data: dict, session_id: str = None) -> str:
     """Create JWT access token with session tracking"""
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(hours=settings.JWT_EXPIRY_HOURS)
+    expire = datetime.now(timezone.utc) + timedelta(hours=settings.JWT_EXPIRY_HOURS)
     to_encode.update({
         "exp": expire,
         "session_id": session_id or generate_session_id()
@@ -68,7 +58,7 @@ def invalidate_other_sessions(user_id: str, new_session_id: str, device_info: st
     active_sessions[user_id] = {
         "session_id": new_session_id,
         "device_info": device_info,
-        "created_at": datetime.utcnow()
+        "created_at": datetime.now(timezone.utc)
     }
 
 
@@ -80,41 +70,42 @@ def is_session_valid(user_id: str, session_id: str) -> bool:
     return current_session["session_id"] == session_id
 
 
+async def _ensure_wallet(db: AsyncSession, user: User, initial_balance: float = 10000.0) -> Wallet:
+    """Create a wallet row for a user if one does not exist."""
+    result = await db.execute(select(Wallet).where(Wallet.user_id == user.id))
+    wallet = result.scalar_one_or_none()
+    if wallet:
+        return wallet
+
+    wallet = Wallet(
+        user_id=user.id,
+        balance=initial_balance,
+        daily_limit=float(user.daily_limit or 100000.0),
+        daily_spent=0.0,
+    )
+    db.add(wallet)
+    await db.flush()
+    return wallet
+
+
 @router.post("/request-otp")
-async def request_otp(request: OTPRequest):
+async def request_otp(request: OTPRequest, db: AsyncSession = Depends(get_db)):
     """
-    Request OTP for phone number
-    - Demo numbers (from contacts.xlsx): OTP displayed on screen
-    - Real numbers: OTP sent via Twilio SMS
+    Request OTP for phone number.
+    OTP is delivered by email when a user email exists, otherwise it is logged server-side in development.
     """
-    otp = generate_otp()
-    otp_store[request.phone_number] = {
-        "otp": otp,
-        "expires": datetime.utcnow() + timedelta(minutes=5),
-        "attempts": 0
-    }
-    
-    # Send OTP via SMS service
-    success, message, display_otp = send_otp_sms(request.phone_number, otp)
-    
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to send OTP. Please try again."
-        )
+    result = await db.execute(select(User).where(User.phone_number == request.phone_number))
+    user = result.scalar_one_or_none()
+    recipient_email = user.email if user and user.email else None
+    delivery = issue_otp_code(request.phone_number, recipient_email=recipient_email)
     
     response = {
         "success": True,
-        "message": message,
+        "message": "OTP generated and dispatched",
         "phone_display": format_phone_display(request.phone_number),
-        "expires_in": 300,
-        "is_demo": is_demo_number(request.phone_number)
+        "expires_in": delivery["expires_in"],
+        "delivery_method": delivery["delivery_method"],
     }
-    
-    # Only include OTP in response for demo numbers
-    if display_otp:
-        response["demo_otp"] = display_otp
-    
     return response
 
 
@@ -125,38 +116,12 @@ async def verify_otp(
     x_device_info: Optional[str] = Header(None, alias="X-Device-Info")
 ):
     """Verify OTP and login/register user with single-device session"""
-    # Check OTP
-    stored = otp_store.get(request.phone_number)
-    
-    if not stored:
+    ok, message = confirm_otp_code(request.phone_number, request.otp)
+    if not ok:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="OTP not found. Please request a new OTP."
+            detail=message,
         )
-    
-    if stored["expires"] < datetime.utcnow():
-        del otp_store[request.phone_number]
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="OTP expired. Please request a new OTP."
-        )
-    
-    stored["attempts"] += 1
-    if stored["attempts"] > 3:
-        del otp_store[request.phone_number]
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Too many attempts. Please request a new OTP."
-        )
-    
-    if stored["otp"] != request.otp:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid OTP"
-        )
-    
-    # OTP verified, clean up
-    del otp_store[request.phone_number]
     
     # Check if user exists
     result = await db.execute(
@@ -183,7 +148,8 @@ async def verify_otp(
         }
     
     # Update last login
-    user.last_login = datetime.utcnow()
+    user.last_login = datetime.now(timezone.utc)
+    await _ensure_wallet(db, user)
     await db.commit()
     
     # Create new session and invalidate previous sessions (single-device enforcement)
@@ -196,13 +162,6 @@ async def verify_otp(
     
     # Invalidate all other sessions
     invalidate_other_sessions(str(user.id), new_session_id, device_info)
-    
-    # Ensure sandbox wallet exists (creates if missing, preserves existing balance)
-    from app.services.sandbox_bank import get_wallet, initialize_wallet
-    existing_wallet = await get_wallet(str(user.id))
-    if not existing_wallet:
-        upi_id = user.upi_id or user.phone_number.replace("+91", "").replace(" ", "") + "@upisafeguard"
-        await initialize_wallet(str(user.id), user.phone_number, initial_balance=10000.0, upi_id=upi_id)
     
     # Create token with session ID
     token = create_access_token(
@@ -270,7 +229,7 @@ async def verify_firebase_token(
         }
     
     # Update last login
-    user.last_login = datetime.utcnow()
+    user.last_login = datetime.now(timezone.utc)
     if not user.firebase_uid and firebase_user.get("uid"):
         user.firebase_uid = firebase_user.get("uid")
     await db.commit()
@@ -337,16 +296,15 @@ async def register(
         upi_id=upi_id,
         security_score=50.0,
         behavior_score=50.0,
-        last_login=datetime.utcnow()
+        last_login=datetime.now(timezone.utc)
     )
     
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    
-    # Initialize sandbox wallet with ₹10,000 (simulated bank deposit)
-    from app.services.sandbox_bank import initialize_wallet
-    await initialize_wallet(str(user.id), user.phone_number, initial_balance=10000.0, upi_id=upi_id)
+
+    await _ensure_wallet(db, user, initial_balance=10000.0)
+    await db.commit()
     
     # Add user to contacts database so they are searchable by other users
     from app.db.excel_database import ExcelDatabase

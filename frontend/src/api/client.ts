@@ -18,7 +18,7 @@ const getDeviceInfo = (): string => {
 }
 
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -95,8 +95,8 @@ export const transactionAPI = {
     }
   }) =>
     api.post('/transactions/create', data),
-  getHistory: (skip?: number, limit?: number) =>
-    api.get('/transactions/history', { params: { page: skip ? Math.floor(skip / (limit || 20)) + 1 : 1, page_size: limit } }),
+  getHistory: (page: number = 1, pageSize: number = 20) =>
+    api.get('/transactions/history', { params: { page, page_size: pageSize } }),
   checkRecipient: (upi_id: string) =>
     api.post('/transactions/check-recipient', { upi_id }),
 }

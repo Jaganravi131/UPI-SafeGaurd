@@ -6,7 +6,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from uuid import UUID
 
@@ -349,7 +349,7 @@ async def approve_transaction(
     
     transaction.status = TransactionStatus.COMPLETED
     transaction.guardian_approved = True
-    transaction.completed_at = datetime.utcnow()
+    transaction.completed_at = datetime.now(timezone.utc)
     
     await db.commit()
     

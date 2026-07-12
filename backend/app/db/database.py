@@ -118,22 +118,16 @@ async def init_postgres():
 
 
 async def init_mongodb():
-    """Initialize MongoDB connection"""
+    """Safe no-op for optional MongoDB integration."""
     global mongo_client, mongo_db
-    mongo_client = AsyncIOMotorClient(settings.MONGODB_URL)
-    mongo_db = mongo_client[settings.MONGODB_DATABASE]
-    
-    # Create indexes
-    await mongo_db.behavioral_logs.create_index("user_id")
-    await mongo_db.behavioral_logs.create_index("timestamp")
-    await mongo_db.fraud_reports.create_index("upi_id")
-    await mongo_db.ml_features.create_index("transaction_id")
+    mongo_client = None
+    mongo_db = None
 
 
 async def init_redis():
-    """Initialize Redis connection"""
+    """Safe no-op for optional Redis integration."""
     global redis_client
-    redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+    redis_client = None
 
 
 async def get_db():

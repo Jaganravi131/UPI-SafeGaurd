@@ -5,7 +5,7 @@ Handles system monitoring, analytics, and model management
 from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict
 from uuid import UUID
 
@@ -30,7 +30,7 @@ async def get_dashboard_overview(
     txn_count = await db.execute(select(func.count(Transaction.id)))
     total_transactions = txn_count.scalar() or 0
     
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     today_txn = await db.execute(
         select(func.count(Transaction.id))
         .where(Transaction.created_at >= today)
@@ -76,7 +76,7 @@ async def get_dashboard_overview(
     average_risk_score = round(float(avg_risk.scalar() or 0), 1)
     
     # Active users (logged in within last 7 days)
-    week_ago = datetime.utcnow() - timedelta(days=7)
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
     active = await db.execute(
         select(func.count(User.id))
         .where(User.last_login >= week_ago)
@@ -131,7 +131,7 @@ async def get_risk_distribution(
     admin: Admin = Depends(get_current_admin)
 ):
     """Get risk level distribution over time"""
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
     
     # Get risk level counts
     low = await db.execute(
@@ -164,7 +164,7 @@ async def get_risk_distribution(
             "critical": critical.scalar() or 0,
         },
         "trend": [
-            {"date": (datetime.utcnow() - timedelta(days=i)).strftime("%Y-%m-%d"), 
+            {"date": (datetime.now(timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d"), 
              "low": 100, "medium": 20, "high": 5, "critical": 1}
             for i in range(days-1, -1, -1)
         ]
@@ -418,16 +418,16 @@ async def get_system_health(db: AsyncSession = Depends(get_db), admin: Admin = D
     
     # Service statuses
     services = [
-        {"name": "FastAPI Backend", "status": "running", "uptime": "active", "memory": "N/A", "lastRestart": datetime.utcnow().strftime("%Y-%m-%d %H:%M")},
+        {"name": "FastAPI Backend", "status": "running", "uptime": "active", "memory": "N/A", "lastRestart": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")},
         {"name": "SQLite Database", "status": "running" if db_status == "healthy" else "error", "uptime": "active", "memory": "N/A", "lastRestart": "N/A"},
         {"name": "ML Inference Service", "status": "running" if models_loaded >= 1 else "stopped", "uptime": "active", "memory": "N/A", "lastRestart": "N/A"},
     ]
     
     # Recent system logs (synthetic for now)
     logs = [
-        {"id": "1", "timestamp": datetime.utcnow().isoformat(), "level": "info", "service": "API", "message": "System health check completed"},
-        {"id": "2", "timestamp": datetime.utcnow().isoformat(), "level": "info", "service": "ML Service", "message": f"{models_loaded}/4 models loaded successfully"},
-        {"id": "3", "timestamp": datetime.utcnow().isoformat(), "level": "info", "service": "Database", "message": f"Database status: {db_status}"},
+        {"id": "1", "timestamp": datetime.now(timezone.utc).isoformat(), "level": "info", "service": "API", "message": "System health check completed"},
+        {"id": "2", "timestamp": datetime.now(timezone.utc).isoformat(), "level": "info", "service": "ML Service", "message": f"{models_loaded}/4 models loaded successfully"},
+        {"id": "3", "timestamp": datetime.now(timezone.utc).isoformat(), "level": "info", "service": "Database", "message": f"Database status: {db_status}"},
     ]
     
     return {
@@ -440,7 +440,7 @@ async def get_system_health(db: AsyncSession = Depends(get_db), admin: Admin = D
             "database": {"status": db_status},
             "ml_models": {"status": "healthy" if models_loaded >= 3 else "degraded", "loaded": models_loaded, "total": 4},
         },
-        "last_check": datetime.utcnow().isoformat()
+        "last_check": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -873,7 +873,7 @@ async def list_ml_models(admin: Admin = Depends(get_current_admin)):
             "f1_score": round(f1, 1),
             "latency_ms": latency,
             "predictions_today": 0,
-            "last_trained": datetime.utcnow().isoformat(),
+            "last_trained": datetime.now(timezone.utc).isoformat(),
             "version": "2.0-trained" if is_trained else "1.0-heuristic",
             "trend": "up" if is_trained else "stable",
         })

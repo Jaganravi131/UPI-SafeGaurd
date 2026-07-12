@@ -48,7 +48,7 @@ export default function TransactionHistory() {
     if (!user?.id) return
     if (!silent) setIsLoading(true)
     try {
-      const response = await transactionAPI.getHistory(0, 50)
+      const response = await transactionAPI.getHistory(1, 50)
       const txList = response.data.transactions || []
       // Map DB transaction format to our component interface
       const mapped: WalletTransaction[] = txList.map((t: any) => ({

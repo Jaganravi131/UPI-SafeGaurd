@@ -5,6 +5,8 @@ Real-time fraud detection and prevention platform for UPI transactions
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from pathlib import Path
+import joblib
 
 from app.config import settings
 from app.db.database import init_postgres, init_mongodb, init_redis, close_connections
@@ -14,6 +16,9 @@ from app.api.routes import intervention
 from app.api.routes import contacts
 from app.api.routes import security
 from app.db.excel_database import init_excel_databases
+from app.ml.risk_engine import RiskEngine
+from app.ml.pipeline.risk_adapter import RiskAdapter
+from app.services.risk_assessment_service import RiskAssessmentService
 
 
 async def _seed_demo_data():
@@ -23,7 +28,7 @@ async def _seed_demo_data():
         return
     from sqlalchemy import select, func
     from app.db.models import Transaction, TransactionStatus, RiskLevel
-    from datetime import datetime, timedelta
+    from datetime import datetime, timezone, timedelta
     import uuid, random
 
     async with _async_session_local() as session:
@@ -43,7 +48,7 @@ async def _seed_demo_data():
 
         # Use a dummy user_id — these are visible only in admin dashboard aggregate stats
         dummy_user = str(uuid.uuid4())
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         for t in demo_txns:
             txn = Transaction(
                 user_id=dummy_user,
@@ -95,14 +100,21 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[WARN] Redis connection failed (demo mode): {e}")
     
-    # Pre-warm ML models so the first request isn't slow
-    print("[*] Pre-warming ML models...")
+    # Load the single risk engine once and keep it on app.state.
+    print("[*] Loading risk engine artifact...")
     try:
-        from app.ml.pipeline.model_inference import get_model_inference
-        get_model_inference()
-        print("[OK] ML Models pre-warmed and ready")
+        model_path = Path(__file__).resolve().parent / "ml" / "trained_models" / "risk_engine.joblib"
+        if model_path.exists():
+            risk_engine = joblib.load(model_path)
+            print(f"[OK] Loaded risk engine from {model_path}")
+        else:
+            risk_engine = RiskEngine()
+            print("[WARN] risk_engine.joblib missing; using deterministic fallback engine")
+        app.state.risk_engine = risk_engine
+        app.state.risk_adapter = RiskAdapter(risk_engine)
+        app.state.risk_assessment_service = RiskAssessmentService(app.state.risk_adapter)
     except Exception as e:
-        print(f"[WARN] ML model pre-warm failed (will load on first request): {e}")
+        print(f"[WARN] Risk engine load failed: {e}")
     
     # Seed demo data if database is empty
     try:
@@ -124,26 +136,22 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     description="""
-    ## UPI SafeGuard - AI-Powered Fraud Prevention Platform
+    ## UPI SafeGuard - Web-Based UPI Fraud-Risk Analysis Prototype
     
-    UPI SafeGuard monitors transactions in real-time, detects suspicious activity 
-    using AI/ML models, and alerts users BEFORE confirming potentially fraudulent payments.
+    UPI SafeGuard analyzes simulated UPI transactions in real time, surfaces risk
+    signals, and warns users before potentially fraudulent payments are confirmed.
     
     ### Features:
-    - 🔍 Real-time ML risk assessment
-    - 🧠 Behavioral profiling (LSTM)
-    - 🕸️ Fraud network detection (GNN)
-    - 🚨 Anomaly detection (Isolation Forest)
-    - 📱 Coercion detection via sensors
+    - 🔍 Real-time risk assessment with a single honest engine
+    - 🕸️ Graph and anomaly signals
+    - 📱 Coercion-aware warnings
     - 👨‍👩‍👧 Guardian mode for vulnerable users
     - 🎮 Gamified security education
     
-    ### ML Models:
-    - XGBoost Risk Scorer (94.2% accuracy)
-    - Behavioral Profiler (Gradient Boosted Trees)
-    - Isolation Forest Anomaly Detector
-    - Graph-Based Fraud Network Detector (BFS + Community Detection)
-    - Sensor Stress Detector (Rule-Based)
+    ### Limits:
+    - Uses simulated or local data only
+    - No real bank integration
+    - Training metrics depend on the local PaySim artifact or fallback engine
     """,
     version=settings.APP_VERSION,
     lifespan=lifespan
@@ -209,11 +217,6 @@ app.include_router(ai_routes.router, prefix="/api/v1")
 from app.api.routes import notifications as notifications_routes
 app.include_router(notifications_routes.router, prefix="/api/v1")
 
-# Sandbox wallet router
-from app.api.routes import wallet
-app.include_router(wallet.router, prefix="/api/v1")
-
-
 @app.get("/")
 async def root():
     """Root endpoint"""
@@ -230,26 +233,22 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    from pathlib import Path
+    model_path = Path(__file__).resolve().parent / "ml" / "trained_models" / "risk_engine.joblib"
     return {
         "status": "healthy",
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
-        "ml_models": {
-            "xgboost": "rule-based (demo)",
-            "lstm": "rule-based (demo)",
-            "isolation_forest": "synthetic-trained (demo)",
-            "gnn": "graph-algorithms (demo)",
-            "sensor": "threshold-based (demo)"
+        "risk_engine": {
+            "artifact": str(model_path),
+            "loaded": hasattr(app.state, "risk_engine"),
         }
     }
 
 
 @app.get("/api/v1/ml/test")
 async def test_ml_models():
-    """Test ML models with sample transaction"""
-    from app.ml.pipeline import get_model_inference
-    
-    model_inference = get_model_inference()
+    """Test the risk engine with a sample transaction"""
     
     # Sample transaction
     transaction_data = {
@@ -278,7 +277,7 @@ async def test_ml_models():
         "account_age_days": 30,
     }
     
-    result = await model_inference.assess_risk(
+    result = app.state.risk_adapter.assess(
         transaction_data,
         user_profile,
         recipient_profile

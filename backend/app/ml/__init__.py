@@ -1,11 +1,6 @@
 """ML package"""
-from app.ml.models import (
-    XGBoostRiskScorer,
-    LSTMBehavioralProfiler,
-    IsolationForestAnomaly,
-    GraphNeuralNetwork,
-    SensorStressDetector
-)
+from app.ml.models import IsolationForestAnomaly, GraphNeuralNetwork
+from app.ml.risk_engine import RiskEngine
 from app.ml.pipeline import (
     FeatureEngineering,
     RiskAggregator,
@@ -13,19 +8,19 @@ from app.ml.pipeline import (
     RiskLevel,
     ModelInference,
     get_model_inference,
+    RiskAdapter,
     ExplanationGenerator
 )
 
 __all__ = [
-    "XGBoostRiskScorer",
-    "LSTMBehavioralProfiler",
     "IsolationForestAnomaly", 
     "GraphNeuralNetwork",
-    "SensorStressDetector",
+    "RiskEngine",
     "FeatureEngineering",
     "RiskAggregator",
     "ModelOutput",
     "RiskLevel",
+    "RiskAdapter",
     "ModelInference",
     "get_model_inference",
     "ExplanationGenerator"

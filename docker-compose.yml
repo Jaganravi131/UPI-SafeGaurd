@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - JWT_SECRET_KEY=default_demo_secret_key_change_in_production
+      - ADMIN_DEFAULT_PASSWORD=admin_secret_pass
+      - RATE_LIMIT_PER_MINUTE=100
+    volumes:
+      - backend-data:/app/app/db
+      - backend-ml:/app/app/ml/trained_models
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    environment:
+      - NODE_ENV=production
+
+volumes:
+  backend-data:
+  backend-ml:
