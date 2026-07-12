@@ -160,6 +160,9 @@ python train_paysim.py
 uvicorn app.main:app --reload --port 8000
 ```
 
+> [!IMPORTANT]
+> When requesting an OTP for login or registration during local development, check the backend terminal/server logs for the code (e.g. `[OTP-DEV] <phone> -> <otp>`), unless SMTP credentials are set.
+
 Swagger docs → [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ### 2. Frontend
@@ -209,8 +212,9 @@ See **[DEPLOYMENT.md](DEPLOYMENT.md)** for step-by-step instructions to deploy:
 
 A [`render.yaml`](render.yaml) blueprint is included for one-click Render setup.
 
+> [!NOTE]
 > Without SMTP/Twilio configured, OTP uses a dev-fallback that logs the code
-> server-side only. Registration still works — check backend logs for the OTP.
+> server-side only. Local development requires reading these server logs to retrieve the OTP code OR setting the `SMTP_*` environment variables in backend `.env` for actual email delivery.
 
 ---
 
