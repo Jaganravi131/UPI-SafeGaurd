@@ -81,17 +81,17 @@ async def init_postgres():
             )
             async with _engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-            print("✅ PostgreSQL connected")
+            print("[OK] PostgreSQL connected")
         except Exception as e:
-            print(f"⚠️ PostgreSQL connection failed: {e}")
+            print(f"[WARN] PostgreSQL connection failed: {e}")
             DEMO_MODE = True
     else:
-        print("⚠️ PostgreSQL server not reachable")
+        print("[WARN] PostgreSQL server not reachable")
         DEMO_MODE = True
     
     # Fallback to SQLite if PostgreSQL is not available
     if DEMO_MODE:
-        print("📝 Using SQLite demo database...")
+        print("[*] Using SQLite demo database...")
         if _engine:
             try:
                 await _engine.dispose()
@@ -107,7 +107,7 @@ async def init_postgres():
             await conn.run_sync(Base.metadata.create_all)
             # Auto-migrate: add any missing columns to existing tables
             await conn.run_sync(_add_missing_columns)
-        print("✅ SQLite demo database initialized")
+        print("[OK] SQLite demo database initialized")
     
     # Create session maker
     _async_session_local = async_sessionmaker(

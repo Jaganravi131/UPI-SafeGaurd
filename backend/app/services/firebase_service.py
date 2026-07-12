@@ -19,10 +19,10 @@ def get_firebase_app():
     if _firebase_app is not None:
         return _firebase_app
     
-    # Get credentials from environment
-    project_id = os.getenv("FIREBASE_PROJECT_ID")
-    private_key = os.getenv("FIREBASE_PRIVATE_KEY")
-    client_email = os.getenv("FIREBASE_CLIENT_EMAIL")
+    from app.config import settings
+    project_id = settings.FIREBASE_PROJECT_ID or os.getenv("FIREBASE_PROJECT_ID")
+    private_key = settings.FIREBASE_PRIVATE_KEY or os.getenv("FIREBASE_PRIVATE_KEY")
+    client_email = settings.FIREBASE_CLIENT_EMAIL or os.getenv("FIREBASE_CLIENT_EMAIL")
     
     if not all([project_id, private_key, client_email]):
         print("⚠️ Firebase credentials not configured - using mock auth")

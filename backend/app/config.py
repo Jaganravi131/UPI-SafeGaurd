@@ -79,11 +79,11 @@ def get_settings() -> Settings:
     # Warn about missing critical secrets at startup
     import warnings
     if not s.JWT_SECRET_KEY:
-        warnings.warn("⚠️  JWT_SECRET_KEY not set in .env — authentication will NOT work!", stacklevel=2)
+        warnings.warn("[WARN] JWT_SECRET_KEY not set in .env — authentication will NOT work!", stacklevel=2)
     if not s.ADMIN_DEFAULT_PASSWORD:
-        warnings.warn("⚠️  ADMIN_DEFAULT_PASSWORD not set in .env — admin login disabled!", stacklevel=2)
+        warnings.warn("[WARN] ADMIN_DEFAULT_PASSWORD not set in .env — admin login disabled!", stacklevel=2)
     if not s.GROQ_API_KEY:
-        warnings.warn("⚠️  GROQ_API_KEY not set in .env — AI features disabled!", stacklevel=2)
+        warnings.warn("[WARN] GROQ_API_KEY not set in .env — AI features disabled!", stacklevel=2)
     return s
 
 
