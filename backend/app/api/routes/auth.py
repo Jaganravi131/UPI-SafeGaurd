@@ -296,7 +296,8 @@ async def register(
         upi_id=upi_id,
         security_score=50.0,
         behavior_score=50.0,
-        last_login=datetime.now(timezone.utc)
+        last_login=datetime.now(timezone.utc),
+        firebase_uid=user_data.firebase_uid
     )
     
     db.add(user)

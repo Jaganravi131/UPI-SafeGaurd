@@ -21,6 +21,7 @@ class UserCreate(UserBase):
     """Schema for user registration"""
     date_of_birth: Optional[datetime] = None
     upi_id: Optional[str] = None
+    firebase_uid: Optional[str] = None
     
     @validator("phone_number")
     def validate_phone(cls, v):

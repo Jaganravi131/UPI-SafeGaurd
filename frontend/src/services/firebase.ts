@@ -12,19 +12,36 @@ import {
 } from 'firebase/auth'
 
 // Firebase configuration - You need to get these from Firebase Console
-// Go to: Firebase Console > Project Settings > General > Your apps > Web app
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "YOUR_API_KEY",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "upi-fruad-detection.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "upi-fruad-detection",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "upi-fruad-detection.appspot.com",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
   appId: import.meta.env.VITE_FIREBASE_APP_ID || ""
 }
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig)
-const auth = getAuth(app)
+// Check if Firebase Web SDK is configured with real credentials
+export const isFirebaseConfigured = 
+  import.meta.env.VITE_FIREBASE_API_KEY && 
+  import.meta.env.VITE_FIREBASE_API_KEY !== "YOUR_API_KEY" &&
+  import.meta.env.VITE_FIREBASE_APP_ID;
+
+// Initialize Firebase conditionally
+let app;
+let auth: any = null;
+
+if (isFirebaseConfigured) {
+  try {
+    app = initializeApp(firebaseConfig)
+    auth = getAuth(app)
+    console.log("✅ Firebase initialized successfully for Phone Auth")
+  } catch (err) {
+    console.error("❌ Failed to initialize Firebase App:", err)
+  }
+} else {
+  console.log("ℹ️ Firebase not configured - using local email/dev-log OTP verification")
+}
 
 // Store confirmation result globally
 let confirmationResult: ConfirmationResult | null = null
@@ -33,10 +50,14 @@ let confirmationResult: ConfirmationResult | null = null
  * Setup reCAPTCHA verifier for phone auth
  * Must be called before sending OTP
  */
-export function setupRecaptcha(containerId: string): RecaptchaVerifier {
+export function setupRecaptcha(containerId: string): RecaptchaVerifier | null {
+  if (!isFirebaseConfigured || !auth) return null
+  
   // Clear any existing verifier
   if ((window as any).recaptchaVerifier) {
-    (window as any).recaptchaVerifier.clear()
+    try {
+      (window as any).recaptchaVerifier.clear()
+    } catch (e) {}
   }
   
   const verifier = new RecaptchaVerifier(auth, containerId, {
@@ -59,6 +80,10 @@ export function setupRecaptcha(containerId: string): RecaptchaVerifier {
  * @returns true if OTP sent successfully
  */
 export async function sendOTP(phoneNumber: string): Promise<boolean> {
+  if (!isFirebaseConfigured || !auth) {
+    throw new Error('Firebase is not configured')
+  }
+  
   try {
     // Ensure phone number has country code
     const formattedPhone = phoneNumber.startsWith('+') 
@@ -87,7 +112,9 @@ export async function sendOTP(phoneNumber: string): Promise<boolean> {
     
     // Reset reCAPTCHA on error
     if ((window as any).recaptchaVerifier) {
-      (window as any).recaptchaVerifier.clear()
+      try {
+        (window as any).recaptchaVerifier.clear()
+      } catch (e) {}
       ;(window as any).recaptchaVerifier = null
     }
     
@@ -101,7 +128,7 @@ export async function sendOTP(phoneNumber: string): Promise<boolean> {
  * @returns Firebase ID token for backend verification
  */
 export async function verifyOTP(otp: string): Promise<string> {
-  if (!confirmationResult) {
+  if (!isFirebaseConfigured || !confirmationResult) {
     throw new Error('Please request OTP first')
   }
   
@@ -122,6 +149,7 @@ export async function verifyOTP(otp: string): Promise<string> {
  * Get current user's ID token (for API calls)
  */
 export async function getIdToken(): Promise<string | null> {
+  if (!isFirebaseConfigured || !auth) return null
   const user = auth.currentUser
   if (!user) return null
   return user.getIdToken()
@@ -131,7 +159,9 @@ export async function getIdToken(): Promise<string | null> {
  * Sign out
  */
 export async function signOut(): Promise<void> {
-  await auth.signOut()
+  if (isFirebaseConfigured && auth) {
+    await auth.signOut()
+  }
   confirmationResult = null
 }
 
@@ -139,6 +169,7 @@ export async function signOut(): Promise<void> {
  * Get current user
  */
 export function getCurrentUser() {
+  if (!isFirebaseConfigured || !auth) return null
   return auth.currentUser
 }
 

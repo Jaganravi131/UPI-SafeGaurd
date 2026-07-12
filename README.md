@@ -194,11 +194,16 @@ python -m pytest -q
 | Feature | Description |
 |---------|-------------|
 | **Risk Scoring** | Rules + IsolationForest anomaly detection + graph-based checks (GNN-lite) |
-| **Email OTP** | Generate, deliver (or log in demo mode), verify, expiry enforcement |
+| **Phone Auth / OTP** | Firebase Phone Authentication for real SMS delivery OR local email/dev-log OTP fallback |
 | **Transaction History** | Paginated list with risk scores and status filters |
 | **Guardian Mode** | Link a guardian with a review threshold for high-risk transactions |
 | **QR Scanner** | Parse merchant QR codes and verify safety |
 | **Admin Dashboard** | Model performance, user management, system health |
+
+### 📱 Phone Sign-in (Firebase Integration)
+The application supports real SMS OTP delivery via Firebase Phone Authentication:
+- **Delegated Authentication**: SMS OTP dispatch, delivery, and verification are delegated entirely to Firebase's secure authentication service. No self-hosted SMS gateway is used.
+- **Fail-Safe Dev Path**: If Firebase environment variables are unset, the system automatically falls back to the local email/dev-log OTP verification flow for quick local development.
 
 *Claims of LSTM, agentic AI, 12-language TTS, or fixed accuracy metrics were not honestly built and have been removed.*
 

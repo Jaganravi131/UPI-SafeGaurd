@@ -22,6 +22,7 @@ import {
 import { authAPI } from '../api/client'
 import { useAuthStore } from '../store'
 import toast from 'react-hot-toast'
+import { isFirebaseConfigured, sendOTP, verifyOTP as confirmFirebaseOTP } from '../services/firebase'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -39,6 +40,7 @@ export default function Login() {
   // Registration fields (for new users)
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
+  const [firebaseUid, setFirebaseUid] = useState('')
   
   // Auto-detected bank info (simulating real UPI apps)
   const [detectedBank, setDetectedBank] = useState<{name: string, lastFour: string, upiId: string, balance: number} | null>(null)
@@ -83,21 +85,30 @@ export default function Login() {
 
     setLoading(true)
     try {
-      const response = await authAPI.requestOTP(`+91${phone}`)
-      
-      if (response.data.demo_otp) {
-        setDemoOtp(response.data.demo_otp)
-        setIsDemo(response.data.is_demo ?? false)
-        setShowDemoOtpModal(true)
+      if (isFirebaseConfigured) {
+        // Real Firebase Phone OTP delivery
+        await sendOTP(`+91${phone}`)
+        toast.success('OTP code sent to your phone via SMS!')
+        setVerifiedPhone(`+91${phone}`)
+        setStep('otp')
       } else {
-        toast.success('OTP sent to your phone!')
-        setIsDemo(false)
+        // Fallback to local dev OTP delivery
+        const response = await authAPI.requestOTP(`+91${phone}`)
+        
+        if (response.data.demo_otp) {
+          setDemoOtp(response.data.demo_otp)
+          setIsDemo(response.data.is_demo ?? false)
+          setShowDemoOtpModal(true)
+        } else {
+          toast.success('OTP sent to your phone!')
+          setIsDemo(false)
+        }
+        setVerifiedPhone(`+91${phone}`)
+        setStep('otp')
       }
-      setVerifiedPhone(`+91${phone}`)
-      setStep('otp')
     } catch (error: any) {
       console.error('OTP error:', error)
-      toast.error(error.response?.data?.detail || 'Failed to send OTP')
+      toast.error(error.message || error.response?.data?.detail || 'Failed to send OTP')
     } finally {
       setLoading(false)
     }
@@ -112,8 +123,18 @@ export default function Login() {
 
     setLoading(true)
     try {
-      const response = await authAPI.verifyOTP(verifiedPhone, otp)
-      const { access_token, user, is_new_user, suggested_name, suggested_upi_id: _suggested_upi_id } = response.data
+      let response;
+      if (isFirebaseConfigured) {
+        // 1. Verify code with Firebase to get Firebase ID token
+        const idToken = await confirmFirebaseOTP(otp)
+        // 2. Post ID token to backend verify route
+        response = await authAPI.verifyFirebaseToken(idToken)
+      } else {
+        // Fallback to local dev OTP verify
+        response = await authAPI.verifyOTP(verifiedPhone, otp)
+      }
+
+      const { access_token, user, is_new_user, suggested_name, phone_number, firebase_uid } = response.data
 
       if (is_new_user) {
         // New user - go to bank detection step (like real UPI apps)
@@ -122,6 +143,14 @@ export default function Login() {
         // Auto-fill name if we found contact info
         if (suggested_name) {
           setFullName(suggested_name)
+        }
+        
+        // Save verified details for registration
+        if (phone_number) {
+          setVerifiedPhone(phone_number)
+        }
+        if (firebase_uid) {
+          setFirebaseUid(firebase_uid)
         }
         
         // Start bank detection
@@ -135,7 +164,7 @@ export default function Login() {
       }
     } catch (error: any) {
       console.error('Verify error:', error)
-      toast.error(error.response?.data?.detail || 'Invalid OTP. Please try again.')
+      toast.error(error.message || error.response?.data?.detail || 'Invalid OTP. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -158,6 +187,7 @@ export default function Login() {
         full_name: fullName,
         upi_id: generatedUpiId,
         email: email || undefined,
+        firebase_uid: firebaseUid || undefined,
       })
       
       const { access_token, user } = response.data
