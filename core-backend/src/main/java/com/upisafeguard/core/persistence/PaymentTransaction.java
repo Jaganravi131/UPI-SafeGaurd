@@ -42,6 +42,18 @@ public class PaymentTransaction {
     @Column(nullable = false)
     private String reason;
 
+    @Column(name = "recipient_name", length = 100)
+    private String recipientName;
+
+    @Column(length = 255)
+    private String purpose;
+
+    @Column(name = "risk_level", length = 10)
+    private String riskLevel;
+
+    @Column(name = "completed_at")
+    private Instant completedAt;
+
     @ElementCollection
     @CollectionTable(name = "payment_risk_factors", joinColumns = @JoinColumn(name = "transaction_id"))
     private List<String> riskFactors;
@@ -109,6 +121,14 @@ public class PaymentTransaction {
     public void setStatus(PaymentStatus status) { this.status = status; }
     public String getReason() { return reason; }
     public void setReason(String reason) { this.reason = reason; }
+    public String getRecipientName() { return recipientName; }
+    public void setRecipientName(String recipientName) { this.recipientName = recipientName; }
+    public String getPurpose() { return purpose; }
+    public void setPurpose(String purpose) { this.purpose = purpose; }
+    public String getRiskLevel() { return riskLevel; }
+    public void setRiskLevel(String riskLevel) { this.riskLevel = riskLevel; }
+    public Instant getCompletedAt() { return completedAt; }
+    public void setCompletedAt(Instant completedAt) { this.completedAt = completedAt; }
     public List<String> getRiskFactors() { return riskFactors; }
     public void setRiskFactors(List<String> riskFactors) { this.riskFactors = riskFactors; }
     public List<String> getModelVersions() { return modelVersions; }

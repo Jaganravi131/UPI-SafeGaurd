@@ -26,6 +26,7 @@ import com.upisafeguard.core.payment.PaymentResult;
 import com.upisafeguard.core.risk.AssessmentTokenService;
 import com.upisafeguard.core.persistence.Wallet;
 import com.upisafeguard.core.persistence.WalletRepository;
+import com.upisafeguard.core.persistence.UserRepository;
 import com.upisafeguard.core.persistence.PaymentTransaction;
 import com.upisafeguard.core.persistence.PaymentTransactionRepository;
 import com.upisafeguard.core.persistence.OTPRepository;
@@ -42,7 +43,8 @@ class PaymentCommandServiceTest {
         WalletRepository walletRepository = mock(WalletRepository.class);
         PaymentTransactionRepository transactionRepository = mock(PaymentTransactionRepository.class);
         OTPRepository otpRepository = mock(OTPRepository.class);
-        PaymentCommandService payments = new PaymentCommandService(tokenService, walletRepository, transactionRepository, otpRepository);
+        UserRepository userRepository = mock(UserRepository.class);
+        PaymentCommandService payments = new PaymentCommandService(tokenService, walletRepository, transactionRepository, otpRepository, userRepository);
 
         UUID userId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
         
@@ -87,7 +89,8 @@ class PaymentCommandServiceTest {
         WalletRepository walletRepository = mock(WalletRepository.class);
         PaymentTransactionRepository transactionRepository = mock(PaymentTransactionRepository.class);
         OTPRepository otpRepository = mock(OTPRepository.class);
-        PaymentCommandService payments = new PaymentCommandService(tokenService, walletRepository, transactionRepository, otpRepository);
+        UserRepository userRepository = mock(UserRepository.class);
+        PaymentCommandService payments = new PaymentCommandService(tokenService, walletRepository, transactionRepository, otpRepository, userRepository);
 
         UUID userId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
         Wallet wallet = new Wallet(userId, BigDecimal.valueOf(1000));
@@ -115,7 +118,8 @@ class PaymentCommandServiceTest {
         WalletRepository walletRepository = mock(WalletRepository.class);
         PaymentTransactionRepository transactionRepository = mock(PaymentTransactionRepository.class);
         OTPRepository otpRepository = mock(OTPRepository.class);
-        PaymentCommandService payments = new PaymentCommandService(tokenService, walletRepository, transactionRepository, otpRepository);
+        UserRepository userRepository = mock(UserRepository.class);
+        PaymentCommandService payments = new PaymentCommandService(tokenService, walletRepository, transactionRepository, otpRepository, userRepository);
 
         UUID userId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
         Wallet wallet = new Wallet(userId, BigDecimal.valueOf(100));
@@ -144,7 +148,8 @@ class PaymentCommandServiceTest {
         WalletRepository walletRepository = mock(WalletRepository.class);
         PaymentTransactionRepository transactionRepository = mock(PaymentTransactionRepository.class);
         OTPRepository otpRepository = mock(OTPRepository.class);
-        PaymentCommandService payments = new PaymentCommandService(tokenService, walletRepository, transactionRepository, otpRepository);
+        UserRepository userRepository = mock(UserRepository.class);
+        PaymentCommandService payments = new PaymentCommandService(tokenService, walletRepository, transactionRepository, otpRepository, userRepository);
 
         UUID userId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
         Wallet wallet = new Wallet(userId, BigDecimal.valueOf(1000));

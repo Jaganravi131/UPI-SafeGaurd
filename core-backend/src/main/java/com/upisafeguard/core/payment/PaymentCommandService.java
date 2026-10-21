@@ -16,6 +16,8 @@ import com.upisafeguard.core.risk.AssessmentTokenService;
 import com.upisafeguard.core.risk.AssessmentTokenService.AssessmentToken;
 import com.upisafeguard.core.persistence.Wallet;
 import com.upisafeguard.core.persistence.WalletRepository;
+import com.upisafeguard.core.persistence.User;
+import com.upisafeguard.core.persistence.UserRepository;
 import com.upisafeguard.core.persistence.PaymentTransaction;
 import com.upisafeguard.core.persistence.PaymentTransactionRepository;
 import com.upisafeguard.core.persistence.OTPRecord;
@@ -39,16 +41,19 @@ public class PaymentCommandService {
     private final WalletRepository walletRepository;
     private final PaymentTransactionRepository transactionRepository;
     private final OTPRepository otpRepository;
+    private final UserRepository userRepository;
 
     public PaymentCommandService(
             AssessmentTokenService assessmentTokenService,
             WalletRepository walletRepository,
             PaymentTransactionRepository transactionRepository,
-            OTPRepository otpRepository) {
+            OTPRepository otpRepository,
+            UserRepository userRepository) {
         this.assessmentTokenService = assessmentTokenService;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.otpRepository = otpRepository;
+        this.userRepository = userRepository;
     }
 
     @Transactional
@@ -137,6 +142,11 @@ public class PaymentCommandService {
         wallet.setDailySpent(wallet.getDailySpent().add(command.amount()));
         walletRepository.save(wallet);
 
+        // If the recipient is another UPI SafeGuard user, credit their wallet
+        // and ledger the incoming payment so both sides see it (parity with
+        // the FastAPI /transactions/create behavior).
+        creditRecipientAccount(command);
+
         return saveAndReturn(command, PaymentStatus.COMPLETED, "Payment completed",
                 List.of(
                     "Transaction consistent with profile",
@@ -170,6 +180,7 @@ public class PaymentCommandService {
             wallet.debit(command.amount());
             wallet.setDailySpent(wallet.getDailySpent().add(command.amount()));
             walletRepository.save(wallet);
+            creditRecipientAccount(command);
             return saveAndReturn(command, PaymentStatus.COMPLETED,
                     "Payment completed after guardian approval",
                     List.of(
@@ -203,6 +214,44 @@ public class PaymentCommandService {
         if (lastActiveDate == null || !lastActiveDate.equals(java.time.LocalDate.now())) {
             wallet.setDailySpent(BigDecimal.ZERO);
         }
+    }
+
+    /**
+     * When the payment's recipient UPI belongs to a registered UPI SafeGuard
+     * user, credit their wallet and write a credit ledger row pointing back at
+     * the sender, so the receiver's history shows the incoming payment.
+     */
+    private void creditRecipientAccount(PaymentCommand command) {
+        userRepository.findByUpiId(command.recipientUpi()).ifPresent(recipient -> {
+            if (recipient.getId() != null && recipient.getId().equals(command.userId())) {
+                return;
+            }
+            Wallet recipientWallet = walletRepository.findByUserId(recipient.getId().toString())
+                    .orElseGet(() -> walletRepository.save(new Wallet(recipient.getId(), BigDecimal.ZERO)));
+            recipientWallet.setBalance(recipientWallet.getBalance().add(command.amount()));
+            walletRepository.save(recipientWallet);
+
+            // Credit ledger for the receiver: counterparty is the sender
+            Optional<User> senderOpt = userRepository.findById(command.userId());
+            String senderUpi = senderOpt.map(User::getUpiId)
+                    .filter(upi -> upi != null && !upi.isBlank())
+                    .orElse("sender:" + senderOpt.map(User::getPhoneNumber).orElse("unknown"));
+            String senderName = senderOpt.map(User::getFullName).orElse(null);
+
+            PaymentTransaction credit = new PaymentTransaction(
+                    recipient.getId(),
+                    senderUpi,
+                    command.amount(),
+                    // unique per receiver row; shares idempotency with the payment
+                    "inbound-" + command.idempotencyKey(),
+                    PaymentStatus.COMPLETED,
+                    "Payment received");
+            credit.setRecipientName(senderName);
+            credit.setPurpose("Payment received");
+            credit.setRiskLevel("LOW");
+            credit.setCompletedAt(Instant.now());
+            transactionRepository.save(credit);
+        });
     }
 
     private PaymentResult saveAndReturn(PaymentCommand command, PaymentStatus status,

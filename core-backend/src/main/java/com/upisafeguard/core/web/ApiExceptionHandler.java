@@ -11,6 +11,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
+    @ExceptionHandler(ApiRequestException.class)
+    ResponseEntity<Object> handleApiRequest(ApiRequestException exception) {
+        // FastAPI-style body the frontend understands: {"detail": "..."}
+        return ResponseEntity.status(exception.getStatus())
+                .body(java.util.Map.of("detail", exception.getMessage() == null ? "" : exception.getMessage()));
+    }
+
     @ExceptionHandler(RiskServiceUnavailableException.class)
     ResponseEntity<ApiError> handleRiskServiceUnavailable(RiskServiceUnavailableException exception) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)

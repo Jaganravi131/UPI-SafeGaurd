@@ -87,4 +87,11 @@ public class Wallet {
         }
         balance = balance.subtract(amount);
     }
+
+    public void credit(BigDecimal amount) {
+        if (amount.signum() <= 0) {
+            throw new IllegalArgumentException("Credit amount must be positive");
+        }
+        balance = balance.add(amount);
+    }
 }
