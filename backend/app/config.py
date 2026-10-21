@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     APP_VERSION: str = "2.0.0"
     DEBUG: bool = True
     ENVIRONMENT: str = "development"
+    EXPOSE_DEMO_OTP: bool = False
     
     # JWT — MUST be set via .env file
     JWT_SECRET_KEY: str = ""  # Loaded from .env
@@ -36,6 +37,9 @@ class Settings(BaseSettings):
     
     # ML Model Settings
     ML_MODEL_PATH: str = "./ml_models"
+    AI_SERVICE_URL: str = "http://localhost:8001"
+    AI_SERVICE_TIMEOUT_SECONDS: float = 3.0
+    USE_REMOTE_RISK_SERVICE: bool = False
     XGBOOST_MODEL_PATH: str = "./ml_models/xgboost_risk_model.json"
     LSTM_MODEL_PATH: str = "./ml_models/lstm_behavioral.h5"
     GNN_MODEL_PATH: str = "./ml_models/gnn_fraud_network.pt"
@@ -48,6 +52,7 @@ class Settings(BaseSettings):
     # Groq LLM (for translation, AI scam advisor, smart alerts)
     GROQ_API_KEY: str = ""  # Loaded from .env
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    DEMO_AI_FALLBACK: bool = False
     
     # External APIs (Optional)
     GOOGLE_CLOUD_PROJECT_ID: Optional[str] = None

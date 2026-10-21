@@ -15,9 +15,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY . .
 
-# Train model on paysim synthetic split at build time if not present
-RUN python train_paysim.py
-
 # Expose backend port
 EXPOSE 8000
 

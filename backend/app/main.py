@@ -6,7 +6,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pathlib import Path
-import joblib
 
 from app.config import settings
 from app.db.database import init_postgres, init_mongodb, init_redis, close_connections
@@ -19,6 +18,7 @@ from app.db.excel_database import init_excel_databases
 from app.ml.risk_engine import RiskEngine
 from app.ml.pipeline.risk_adapter import RiskAdapter
 from app.services.risk_assessment_service import RiskAssessmentService
+from app.services.risk_service_client import RiskServiceClient
 
 
 async def _seed_demo_data():
@@ -103,16 +103,24 @@ async def lifespan(app: FastAPI):
     # Load the single risk engine once and keep it on app.state.
     print("[*] Loading risk engine artifact...")
     try:
-        model_path = Path(__file__).resolve().parent / "ml" / "trained_models" / "risk_engine.joblib"
+        model_path = Path(__file__).resolve().parent / "ml" / "trained_models" / "risk_model.joblib"
         if model_path.exists():
-            risk_engine = joblib.load(model_path)
-            print(f"[OK] Loaded risk engine from {model_path}")
+            risk_engine = RiskEngine.from_artifact(model_path)
+            print(f"[OK] Loaded XGBoost risk model from {model_path}")
         else:
             risk_engine = RiskEngine()
-            print("[WARN] risk_engine.joblib missing; using deterministic fallback engine")
+            print("[WARN] risk_model.joblib missing; using deterministic fallback engine")
         app.state.risk_engine = risk_engine
         app.state.risk_adapter = RiskAdapter(risk_engine)
-        app.state.risk_assessment_service = RiskAssessmentService(app.state.risk_adapter)
+        remote_client = RiskServiceClient(
+            settings.AI_SERVICE_URL,
+            settings.AI_SERVICE_TIMEOUT_SECONDS,
+        )
+        app.state.risk_assessment_service = RiskAssessmentService(
+            app.state.risk_adapter,
+            remote_client=remote_client,
+            use_remote=settings.USE_REMOTE_RISK_SERVICE,
+        )
     except Exception as e:
         print(f"[WARN] Risk engine load failed: {e}")
     
@@ -143,7 +151,7 @@ app = FastAPI(
     
     ### Features:
     - 🔍 Real-time risk assessment with a single honest engine
-    - 🕸️ Graph and anomaly signals
+    - 📊 XGBoost risk scoring with deterministic safety rules
     - 📱 Coercion-aware warnings
     - 👨‍👩‍👧 Guardian mode for vulnerable users
     - 🎮 Gamified security education
@@ -209,6 +217,14 @@ app.include_router(intervention.router, prefix="/api/v1")
 app.include_router(contacts.router, prefix="/api/v1")
 app.include_router(security.router, prefix="/api/v1")
 
+# Wallet & sandbox banking routes
+from app.api.routes import wallet as wallet_routes
+app.include_router(wallet_routes.router, prefix="/api/v1")
+
+# User profile routes
+from app.api.routes import users as users_routes
+app.include_router(users_routes.router, prefix="/api/v1")
+
 # AI (Groq LLM) routes — translation, chatbot, scam explainer
 from app.api.routes import ai as ai_routes
 app.include_router(ai_routes.router, prefix="/api/v1")
@@ -234,7 +250,7 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     from pathlib import Path
-    model_path = Path(__file__).resolve().parent / "ml" / "trained_models" / "risk_engine.joblib"
+    model_path = Path(__file__).resolve().parent / "ml" / "trained_models" / "risk_model.joblib"
     return {
         "status": "healthy",
         "app": settings.APP_NAME,

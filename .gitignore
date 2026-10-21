@@ -59,3 +59,13 @@ coverage.xml
 # Temp files
 *.tmp
 *.temp
+
+# Local session/generated outputs
+tsc_check.txt
+rebuild*.txt
+docker_output.txt
+core-backend-last.txt
+.freebuff/
+core-backend/target/
+core-backend/test_output*.txt
+backend/flake_output.txt

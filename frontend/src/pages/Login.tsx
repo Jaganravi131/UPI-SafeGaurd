@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Shield, 
-  Phone, 
   Lock, 
   ArrowRight, 
   User, 
@@ -17,37 +16,53 @@ import {
   Info,
   Copy,
   X,
-  Building2
+  Building2,
 } from 'lucide-react'
 import { authAPI } from '../api/client'
 import { useAuthStore } from '../store'
 import toast from 'react-hot-toast'
-import { isFirebaseConfigured, sendOTP, verifyOTP as confirmFirebaseOTP } from '../services/firebase'
+import { sendOTP, verifyOTP } from '../services/otpService'
+
+/**
+ * Deterministic pseudo-phone derived from the email.
+ * The backend account model and OTP store are keyed by phone number,
+ * so every OTP request/verify/register for the same email must use the
+ * SAME key. Format passes backend validation ^[6-9]\d{9}$.
+ */
+const generatePhoneFromEmail = (email: string) => {
+  let hash = 0
+  for (let i = 0; i < email.length; i++) {
+    hash = ((hash << 5) - hash) + email.charCodeAt(i)
+    hash = hash & hash
+  }
+  const abs = Math.abs(hash)
+  const leadingDigit = 6 + (abs % 4)
+  const suffix = abs.toString().padStart(9, '0').slice(-9)
+  return `+91${leadingDigit}${suffix}`
+}
 
 export default function Login() {
   const navigate = useNavigate()
   const { setAuth } = useAuthStore()
   
-  // Steps: phone -> otp -> bank_detection -> register (for new users only)
-  const [step, setStep] = useState<'phone' | 'otp' | 'bank_detection' | 'register'>('phone')
-  const [phone, setPhone] = useState('')
+  // Steps: email -> otp -> bank_detection -> register (for new users only)
+  const [step, setStep] = useState<'email' | 'otp' | 'bank_detection' | 'register'>('email')
+  const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')
   const [demoOtp, setDemoOtp] = useState('')
   const [showDemoOtpModal, setShowDemoOtpModal] = useState(false)
-  const [_isDemo, setIsDemo] = useState(false)
   const [loading, setLoading] = useState(false)
   
   // Registration fields (for new users)
   const [fullName, setFullName] = useState('')
-  const [email, setEmail] = useState('')
   const [firebaseUid, setFirebaseUid] = useState('')
   
   // Auto-detected bank info (simulating real UPI apps)
   const [detectedBank, setDetectedBank] = useState<{name: string, lastFour: string, upiId: string, balance: number} | null>(null)
   const [isDetectingBank, setIsDetectingBank] = useState(false)
   
-  // Store phone for registration
-  const [verifiedPhone, setVerifiedPhone] = useState('')
+  // Store email for registration
+  const [verifiedEmail, setVerifiedEmail] = useState('')
 
   const copyOtpToClipboard = () => {
     navigator.clipboard.writeText(demoOtp)
@@ -61,15 +76,15 @@ export default function Login() {
     // Simulate API call to detect linked bank accounts
     await new Promise(resolve => setTimeout(resolve, 2000))
     
-    // Generate realistic bank info based on phone number
+    // Generate realistic bank info based on email
     const bankNames = ['HDFC Bank', 'SBI', 'ICICI Bank', 'Axis Bank', 'Kotak Mahindra']
     const upiHandles = ['@okhdfc', '@oksbi', '@okicici', '@okaxis', '@kotak']
-    const randomIndex = parseInt(phone.slice(-1)) % bankNames.length
+    const randomIndex = parseInt(email.slice(-1)) % bankNames.length
     
     setDetectedBank({
       name: bankNames[randomIndex],
-      lastFour: phone.slice(-4),
-      upiId: `${phone}${upiHandles[randomIndex]}`,
+      lastFour: email.slice(-4),
+      upiId: `${email.split('@')[0]}${upiHandles[randomIndex]}`,
       balance: 10000 // Initial sandbox balance, updates dynamically via wallet API
     })
     
@@ -78,37 +93,30 @@ export default function Login() {
 
   // Step 1: Request OTP
   const handleRequestOTP = async () => {
-    if (phone.length !== 10) {
-      toast.error('Please enter a valid 10-digit phone number')
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      toast.error('Please enter a valid email address')
       return
     }
 
     setLoading(true)
     try {
-      if (isFirebaseConfigured) {
-        // Real Firebase Phone OTP delivery
-        await sendOTP(`+91${phone}`)
-        toast.success('OTP code sent to your phone via SMS!')
-        setVerifiedPhone(`+91${phone}`)
+      const response = await sendOTP(generatePhoneFromEmail(email))
+      if (response.success) {
+        toast.success(response.message || 'OTP sent to your email!')
+        setVerifiedEmail(email)
         setStep('otp')
-      } else {
-        // Fallback to local dev OTP delivery
-        const response = await authAPI.requestOTP(`+91${phone}`)
-        
-        if (response.data.demo_otp) {
-          setDemoOtp(response.data.demo_otp)
-          setIsDemo(response.data.is_demo ?? false)
+        // Backend-issued demo OTP (development mode only)
+        if (response.devOtp) {
+          setDemoOtp(response.devOtp)
           setShowDemoOtpModal(true)
-        } else {
-          toast.success('OTP sent to your phone!')
-          setIsDemo(false)
         }
-        setVerifiedPhone(`+91${phone}`)
-        setStep('otp')
+      } else {
+        toast.error(response.message || 'Failed to send OTP')
       }
     } catch (error: any) {
       console.error('OTP error:', error)
-      toast.error(error.message || error.response?.data?.detail || 'Failed to send OTP')
+      toast.error(error.message || 'Failed to send OTP')
     } finally {
       setLoading(false)
     }
@@ -123,48 +131,43 @@ export default function Login() {
 
     setLoading(true)
     try {
-      let response;
-      if (isFirebaseConfigured) {
-        // 1. Verify code with Firebase to get Firebase ID token
-        const idToken = await confirmFirebaseOTP(otp)
-        // 2. Post ID token to backend verify route
-        response = await authAPI.verifyFirebaseToken(idToken)
-      } else {
-        // Fallback to local dev OTP verify
-        response = await authAPI.verifyOTP(verifiedPhone, otp)
-      }
+      const response = await verifyOTP(generatePhoneFromEmail(email), otp)
+      if (response.success && response.auth) {
+        toast.success('Email verified!')
 
-      const { access_token, user, is_new_user, suggested_name, phone_number, firebase_uid } = response.data
+        const { access_token, user, is_new_user, suggested_name, firebase_uid } = response.auth
 
-      if (is_new_user) {
-        // New user - go to bank detection step (like real UPI apps)
-        toast.success('OTP verified! Detecting your bank accounts...')
-        
-        // Auto-fill name if we found contact info
-        if (suggested_name) {
-          setFullName(suggested_name)
+        if (is_new_user) {
+          // New user - go to bank detection step (like real UPI apps)
+          toast.success('OTP verified! Detecting your bank accounts...')
+          
+          // Auto-fill name if we found contact info
+          if (suggested_name) {
+            setFullName(suggested_name)
+          }
+          
+          // Save verified details for registration
+          if (firebase_uid) {
+            setFirebaseUid(firebase_uid)
+          }
+          
+          // Start bank detection
+          setStep('bank_detection')
+          detectBankAccounts()
+        } else if (user && access_token) {
+          // Existing user - login directly
+          setAuth(access_token, user)
+          toast.success(`Welcome back, ${user.full_name}!`)
+          navigate('/dashboard')
+        } else {
+          toast.error('Login session incomplete. Please try again.')
         }
-        
-        // Save verified details for registration
-        if (phone_number) {
-          setVerifiedPhone(phone_number)
-        }
-        if (firebase_uid) {
-          setFirebaseUid(firebase_uid)
-        }
-        
-        // Start bank detection
-        setStep('bank_detection')
-        detectBankAccounts()
       } else {
-        // Existing user - login directly
-        setAuth(access_token, user)
-        toast.success(`Welcome back, ${user.full_name}!`)
-        navigate('/dashboard')
+        toast.error(response.message || 'Invalid OTP. Please try again.')
       }
     } catch (error: any) {
       console.error('Verify error:', error)
-      toast.error(error.message || error.response?.data?.detail || 'Invalid OTP. Please try again.')
+      toast.error(error.response?.data?.detail || error.message || 'Invalid OTP. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -178,15 +181,15 @@ export default function Login() {
     }
 
     // Use auto-detected UPI ID from bank
-    const generatedUpiId = detectedBank?.upiId || `${phone}@upisafeguard`
+    const generatedUpiId = detectedBank?.upiId || `${email.split('@')[0]}@upisafeguard`
 
     setLoading(true)
     try {
       const response = await authAPI.register({
-        phone_number: verifiedPhone,
+        phone_number: generatePhoneFromEmail(verifiedEmail),
         full_name: fullName,
         upi_id: generatedUpiId,
-        email: email || undefined,
+        email: verifiedEmail,
         firebase_uid: firebaseUid || undefined,
       })
       
@@ -209,45 +212,8 @@ export default function Login() {
     setStep('register')
   }
 
-  // Demo login — only available in development mode
-  const isDev = import.meta.env.DEV
-  const handleDemoLogin = async () => {
-    if (!isDev) return
-    try {
-      // Use real OTP flow with demo number
-      const res = await authAPI.requestOTP('+919876543210')
-      if (res.data.demo_otp) {
-        const verifyRes = await authAPI.verifyOTP('+919876543210', res.data.demo_otp)
-        if (verifyRes.data.access_token && verifyRes.data.user) {
-          setAuth(verifyRes.data.access_token, verifyRes.data.user)
-          toast.success('Logged in as Demo User')
-          navigate('/dashboard')
-        } else {
-          // New user — need registration, just fill the phone for them
-          setPhone('9876543210')
-          setStep('phone')
-          toast('Demo number ready — click Get OTP', { icon: 'ℹ️' })
-        }
-      } else {
-        setPhone('9876543210')
-        setStep('phone')
-        toast('Demo number ready — click Get OTP', { icon: 'ℹ️' })
-      }
-    } catch {
-      setPhone('9876543210')
-      setStep('phone')
-      toast('Demo number ready — click Get OTP', { icon: 'ℹ️' })
-    }
-  }
-
-  // Resend OTP
-  const handleResendOTP = async () => {
-    setOtp('')
-    await handleRequestOTP()
-  }
-
-  const stepNames = ['Phone', 'Verify', 'Bank', 'Profile']
-  const currentStepIndex = step === 'phone' ? 0 : step === 'otp' ? 1 : step === 'bank_detection' ? 2 : 3
+  const stepNames = ['Email', 'Verify', 'Bank', 'Profile']
+  const currentStepIndex = step === 'email' ? 0 : step === 'otp' ? 1 : step === 'bank_detection' ? 2 : 3
 
   return (
     <div className="min-h-screen relative overflow-hidden">
@@ -262,7 +228,7 @@ export default function Login() {
       </div>
       
       {/* Grid Pattern Overlay */}
-      <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23ffffff%22 fill-opacity=%220.03%22%3E%3Cpath d=%22M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')]" />
+      <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23ffffff%22 fill-opacity=%220.03%22%3E%3Cpath d=%22M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z%22/%3E%3C/g%3E%3C/g%3E%3C/svg%22')]" />
 
       <div className="relative min-h-screen flex items-center justify-center p-4">
         <motion.div
@@ -298,8 +264,8 @@ export default function Login() {
               </div>
               
               <p className="text-gray-500 mt-4 text-sm">
-                {step === 'phone' && 'Enter your phone number to get started'}
-                {step === 'otp' && 'Enter the OTP sent to your phone'}
+                {step === 'email' && 'Enter your email to get started'}
+                {step === 'otp' && 'Enter the OTP sent to your email'}
                 {step === 'bank_detection' && 'Linking your bank account securely'}
                 {step === 'register' && 'Just confirm your name to continue'}
               </p>
@@ -329,10 +295,10 @@ export default function Login() {
             </div>
 
             <AnimatePresence mode="wait">
-              {/* Step 1: Phone Input */}
-              {step === 'phone' && (
+              {/* Step 1: Email Input */}
+              {step === 'email' && (
                 <motion.div
-                  key="phone"
+                  key="email"
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
@@ -341,17 +307,13 @@ export default function Login() {
                   <div className="relative group">
                     <div className="absolute -inset-0.5 bg-gradient-to-r from-primary-500 to-violet-500 rounded-2xl opacity-0 group-focus-within:opacity-100 blur transition-opacity" />
                     <div className="relative bg-white rounded-xl">
-                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <div className="absolute left-12 top-1/2 -translate-y-1/2 text-gray-600 font-semibold">
-                        +91
-                      </div>
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                        placeholder="Enter phone number"
-                        className="w-full pl-[4.5rem] pr-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-0 focus:border-primary-500 text-lg font-medium transition-colors bg-transparent"
-                        maxLength={10}
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="Enter email address"
+                        className="w-full pl-12 pr-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-0 focus:border-primary-500 text-lg font-medium transition-colors bg-transparent"
                         autoFocus
                       />
                     </div>
@@ -361,7 +323,7 @@ export default function Login() {
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.99 }}
                     onClick={handleRequestOTP}
-                    disabled={loading || phone.length !== 10}
+                    disabled={loading || !email}
                     className="w-full bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 disabled:from-gray-300 disabled:to-gray-400 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary-500/25 disabled:shadow-none"
                   >
                     {loading ? (
@@ -371,33 +333,42 @@ export default function Login() {
                       </>
                     ) : (
                       <>
-                        Get OTP
+                        Send OTP
                         <ArrowRight className="w-5 h-5" />
                       </>
                     )}
                   </motion.button>
 
                   {import.meta.env.DEV && (
-                  <>
-                  <div className="relative my-6">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-200" />
+                    <>
+                    <div className="relative my-6">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-gray-200" />
+                      </div>
+                      <div className="relative flex justify-center text-sm">
+                        <span className="px-4 bg-white text-gray-400 font-medium">or try demo</span>
+                      </div>
                     </div>
-                    <div className="relative flex justify-center text-sm">
-                      <span className="px-4 bg-white text-gray-400 font-medium">or try demo</span>
-                    </div>
-                  </div>
 
-                  <motion.button
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    onClick={handleDemoLogin}
-                    className="w-full border-2 border-primary-200 text-primary-600 hover:bg-primary-50 hover:border-primary-300 py-4 rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
-                  >
-                    <Zap className="w-5 h-5" />
-                    Quick Start
-                  </motion.button>
-                  </>
+                    <motion.button
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      onClick={async () => {
+                        const response = await authAPI.requestOTP(email)
+                        if (response.data.demo_otp) {
+                          setDemoOtp(response.data.demo_otp)
+                          setShowDemoOtpModal(true)
+                        } else {
+                          setStep('otp')
+                          toast('Demo ready - click Send OTP', { icon: 'ℹ️' })
+                        }
+                      }}
+                      className="w-full border-2 border-primary-200 text-primary-600 hover:bg-primary-50 hover:border-primary-300 py-4 rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
+                    >
+                      <Zap className="w-5 h-5" />
+                      Quick Start (Demo)
+                    </motion.button>
+                    </>
                   )}
                 </motion.div>
               )}
@@ -425,14 +396,21 @@ export default function Login() {
                           <p className="text-emerald-700 text-sm font-medium">Demo Mode - Your OTP</p>
                         </div>
                         <p className="font-bold text-4xl text-emerald-600 tracking-[0.3em] font-mono">{demoOtp}</p>
+                        <button
+                          onClick={copyOtpToClipboard}
+                          className="mt-3 p-2 hover:bg-white rounded-lg transition-colors"
+                          title="Copy OTP"
+                        >
+                          <Copy className="w-5 h-5 text-emerald-600" />
+                        </button>
                       </div>
                     </motion.div>
                   )}
 
                   <div className="flex items-center justify-center gap-2 py-2">
-                    <Phone className="w-4 h-4 text-gray-400" />
+                    <Mail className="w-4 h-4 text-gray-400" />
                     <span className="text-gray-600 text-sm">OTP sent to</span>
-                    <span className="font-semibold text-gray-900">{verifiedPhone}</span>
+                    <span className="font-semibold text-gray-900">{verifiedEmail}</span>
                   </div>
                   
                   <div className="relative group">
@@ -473,14 +451,14 @@ export default function Login() {
 
                   <div className="flex justify-between text-sm pt-2">
                     <button
-                      onClick={() => { setStep('phone'); setOtp(''); setDemoOtp('') }}
+                      onClick={() => { setStep('email'); setOtp(''); setDemoOtp('') }}
                       className="text-gray-500 hover:text-primary-600 font-medium flex items-center gap-1 transition-colors"
                     >
                       <ChevronLeft className="w-4 h-4" />
-                      Change number
+                      Change email
                     </button>
                     <button
-                      onClick={handleResendOTP}
+                      onClick={handleRequestOTP}
                       className="text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1 transition-colors"
                       disabled={loading}
                     >
@@ -505,8 +483,8 @@ export default function Login() {
                       <ShieldCheck className="w-5 h-5 text-blue-600" />
                     </div>
                     <div>
-                      <p className="text-blue-800 text-sm font-medium">Phone Verified</p>
-                      <p className="text-blue-600 text-xs">{verifiedPhone}</p>
+                      <p className="text-blue-800 text-sm font-medium">Email Verified</p>
+                      <p className="text-blue-600 text-xs">{verifiedEmail}</p>
                     </div>
                   </div>
 
@@ -518,11 +496,11 @@ export default function Login() {
                         <Building2 className="absolute inset-0 m-auto w-8 h-8 text-primary-600" />
                       </div>
                       <p className="text-gray-700 font-medium">Detecting Bank Accounts...</p>
-                      <p className="text-sm text-gray-500 mt-1">Securely connecting to banks linked with your mobile</p>
+                      <p className="text-sm text-gray-500 mt-1">Securely connecting to banks linked with your email</p>
                     </div>
                   ) : detectedBank ? (
                     <div className="space-y-4">
-                      <p className="text-sm text-gray-600 text-center">Bank account found linked to your mobile number</p>
+                      <p className="text-sm text-gray-600 text-center">Bank account found linked to your email</p>
                       
                       <div className="bg-white border-2 border-primary-500 rounded-2xl p-4 shadow-lg shadow-primary-500/10">
                         <div className="flex items-center gap-3 mb-3">
@@ -603,21 +581,6 @@ export default function Login() {
                         placeholder="Full Name *"
                         className="w-full pl-12 pr-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-0 focus:border-primary-500 font-medium transition-colors bg-transparent"
                         autoFocus
-                      />
-                    </div>
-                  </div>
-
-                  {/* Email (optional) */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-primary-500 to-violet-500 rounded-2xl opacity-0 group-focus-within:opacity-100 blur transition-opacity" />
-                    <div className="relative bg-white rounded-xl">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="Email (optional)"
-                        className="w-full pl-12 pr-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-0 focus:border-primary-500 font-medium transition-colors bg-transparent"
                       />
                     </div>
                   </div>
@@ -705,7 +668,7 @@ export default function Login() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900">Demo Mode</h3>
-                    <p className="text-xs text-gray-500">Test phone number detected</p>
+                    <p className="text-xs text-gray-500">Test email detected</p>
                   </div>
                 </div>
                 <button 
@@ -733,7 +696,7 @@ export default function Login() {
               </div>
 
               <p className="text-xs text-gray-500 text-center mb-4">
-                This is a demo number. In production, OTP would be sent via SMS.
+                This is a demo email. In production, OTP would be sent via email.
               </p>
 
               <button

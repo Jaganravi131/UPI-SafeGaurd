@@ -17,6 +17,7 @@ import logging
 
 from app.services.groq_ai_service import get_groq_service, LANGUAGE_MAP
 from app.api.deps import get_optional_user_id
+from app.config import settings
 from app.db.database import get_db
 from app.db.models import Transaction, User, FraudReport, TransactionStatus, RiskLevel as DBRiskLevel
 from app.db.excel_database import ExcelDatabase
@@ -215,6 +216,12 @@ async def scam_advisor_chat(
     """
     svc = get_groq_service()
     if not svc.available:
+        if settings.DEMO_AI_FALLBACK:
+            return ChatResponse(
+                reply=demo_advisor_reply(request.message, request.language),
+                language=request.language,
+                language_name=LANGUAGE_MAP.get(request.language, "English"),
+            )
         raise HTTPException(status_code=503, detail="AI service unavailable")
 
     # ── Build user context from DB if authenticated ──────────────────
@@ -236,6 +243,34 @@ async def scam_advisor_chat(
         reply=reply or "I'm sorry, I couldn't process your question. Please try again.",
         language=request.language,
         language_name=LANGUAGE_MAP.get(request.language, "English"),
+    )
+
+
+def demo_advisor_reply(message: str, language: str) -> str:
+    """Provide transparent, deterministic guidance when Groq is not configured."""
+    normalized = message.lower()
+    if "otp" in normalized or "one-time" in normalized:
+        return (
+            "Demo safety guidance: never share an OTP, UPI PIN, or screen with anyone. "
+            "Banks and legitimate support teams do not need your OTP to receive money. "
+            "If you shared one, contact your bank immediately and freeze affected payments."
+        )
+    if "qr" in normalized:
+        return (
+            "Demo safety guidance: scanning a QR code and entering a UPI PIN usually sends money; "
+            "it does not receive money. Only scan codes from trusted recipients and verify the name "
+            "shown in your UPI app before confirming."
+        )
+    if "scam" in normalized or "fraud" in normalized or "safe" in normalized:
+        return (
+            "Demo safety guidance: pause when a caller creates urgency, requests an OTP or UPI PIN, "
+            "asks you to install a remote-support app, or promises guaranteed returns. Verify through "
+            "the organisation's official website or phone number before paying."
+        )
+    return (
+        "Demo safety guidance: verify the recipient name and UPI ID, never share your OTP or UPI PIN, "
+        "and stop the payment if someone is pressuring you. This local response is deterministic demo "
+        "content; configure GROQ_API_KEY to enable the live AI advisor."
     )
 
 

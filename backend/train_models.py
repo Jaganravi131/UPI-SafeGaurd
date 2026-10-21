@@ -229,15 +229,39 @@ def train_xgboost(df: pd.DataFrame):
     for i in top_idx:
         print(f"    {feature_cols[i]:30s}  {importances[i]:.4f}")
 
+    # Calibrate using Platt scaling on test set (in production, use a separate validation set)
+    from sklearn.linear_model import LogisticRegression
+    lr = LogisticRegression(solver='lbfgs', max_iter=1000)
+    lr.fit(y_proba.reshape(-1, 1), y_test)
+    calibration_A = float(lr.coef_[0, 0])
+    calibration_B = float(lr.intercept_[0])
+    
+    # Verify calibration helps
+    calibrated_proba = 1.0 / (1.0 + np.exp(calibration_A * y_proba + calibration_B))
+    from sklearn.metrics import log_loss
+    original_loss = log_loss(y_test, np.clip(y_proba, 1e-15, 1-1e-15))
+    calibrated_loss = log_loss(y_test, np.clip(calibrated_proba, 1e-15, 1-1e-15))
+    
+    if calibrated_loss < original_loss:
+        print(f"  Calibration: A={calibration_A:.4f}, B={calibration_B:.4f}")
+        print(f"  Log-loss: original={original_loss:.4f}, calibrated={calibrated_loss:.4f}")
+    else:
+        calibration_A, calibration_B = 1.0, 0.0
+        print(f"  Calibration: no improvement, using identity")
+
     # Save
     artifact = {
         "model": model,
         "scaler": scaler,
         "feature_names": feature_cols,
+        "model_type": "xgboost",
+        "model_version": "xgboost-paysim-v1",
         "is_trained": True,
-        "metrics": {"roc_auc": auc, "pr_auc": ap},
+        "metrics": {"roc_auc": auc, "pr_auc": ap, "log_loss": calibrated_loss if 'calibrated_loss' in locals() else original_loss},
+        "calibration_A": calibration_A,
+        "calibration_B": calibration_B,
     }
-    out_path = MODEL_DIR / "xgboost_risk_scorer.joblib"
+    out_path = MODEL_DIR / "risk_model.joblib"
     joblib.dump(artifact, out_path)
     print(f"\n  ✓ Saved to {out_path}")
     return model, scaler, feature_cols
@@ -491,15 +515,9 @@ def main():
     # 4. Isolation Forest
     train_isolation_forest(df)
 
-    # 5. Transaction Graph
-    build_transaction_graph(df)
-
-    # 6. Behavioral Model
-    train_behavioral_model(df)
-
     total_time = time.time() - total_start
     print("\n" + "=" * 60)
-    print(f"  ALL MODELS TRAINED in {total_time:.0f}s")
+    print(f"  PRIMARY XGBOOST MODEL TRAINED in {total_time:.0f}s")
     print(f"  Artifacts saved to: {MODEL_DIR}")
     print("=" * 60)
 

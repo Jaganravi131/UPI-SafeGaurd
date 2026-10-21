@@ -13,6 +13,7 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
+  Plus,
   Sparkles,
   Zap,
   ShieldCheck,
@@ -21,6 +22,7 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '../store'
 import { walletAPI, authAPI, fraudAPI, transactionAPI } from '../api/client'
+import AddMoneyModal from '../components/AddMoneyModal'
 import RiskGauge from '../components/RiskGauge'
 import { useTranslation } from '../contexts/TranslationContext'
 
@@ -28,6 +30,7 @@ export default function Dashboard() {
   const { user, logout } = useAuthStore()
   const { t } = useTranslation()
   const [balance, setBalance] = useState<number | null>(null)
+  const [showAddMoney, setShowAddMoney] = useState(false)
   const [showBalance, setShowBalance] = useState(true)
   const [isLoadingBalance, setIsLoadingBalance] = useState(true)
   const [_sessionValid, setSessionValid] = useState(true)
@@ -162,6 +165,12 @@ export default function Dashboard() {
   }
 
   return (
+    <>
+    <AddMoneyModal
+      open={showAddMoney}
+      onClose={() => setShowAddMoney(false)}
+      onTopUp={() => refreshBalance()}
+    />
     <motion.div 
       className="space-y-6"
       variants={containerVariants}
@@ -192,6 +201,15 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowAddMoney(true)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-xl backdrop-blur-sm transition-colors text-sm font-semibold"
+              >
+                <Plus className="w-4 h-4" />
+                Add Money
+              </motion.button>
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
@@ -431,5 +449,6 @@ export default function Dashboard() {
         </div>
       </motion.div>
     </motion.div>
+    </>
   )
 }

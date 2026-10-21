@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build:
@@ -9,12 +7,61 @@ services:
       - "8000:8000"
     environment:
       - APP_ENV=production
+      - EXPOSE_DEMO_OTP=true
       - JWT_SECRET_KEY=default_demo_secret_key_change_in_production
       - ADMIN_DEFAULT_PASSWORD=admin_secret_pass
       - RATE_LIMIT_PER_MINUTE=100
+      - USE_REMOTE_RISK_SERVICE=true
+      - AI_SERVICE_URL=http://ai-service:8001
+      - DEMO_AI_FALLBACK=true
+      # Persist SQLite inside a dedicated volume so user accounts survive rebuilds
+      - POSTGRES_URL=sqlite+aiosqlite:////app/persist/demo_database.db
     volumes:
-      - backend-data:/app/app/db
+      - sqlite-data:/app/persist
       - backend-ml:/app/app/ml/trained_models
+    depends_on:
+      - ai-service
+
+  ai-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: uvicorn ai_service.main:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    environment:
+      - APP_ENV=production
+    volumes:
+      - backend-ml:/app/app/ml/trained_models
+
+  core-backend:
+    build:
+      context: ./core-backend
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8080"
+    environment:
+      - AI_SERVICE_URL=http://ai-service:8001
+      - AI_SERVICE_TIMEOUT_MS=3000
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/upi_safeguard
+      - DATABASE_USERNAME=upi_safeguard
+      - DATABASE_PASSWORD=upi_safeguard_dev
+      - JPA_DDL_AUTO=update
+      - APP_EXPOSE_DEMO_OTP=true
+    depends_on:
+      - ai-service
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=upi_safeguard
+      - POSTGRES_USER=upi_safeguard
+      - POSTGRES_PASSWORD=upi_safeguard_dev
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
 
   frontend:
     build:
@@ -29,4 +76,6 @@ services:
 
 volumes:
   backend-data:
+  sqlite-data:
   backend-ml:
+  postgres-data:

@@ -346,12 +346,15 @@ def request_otp(phone_number: str, recipient_email: Optional[str] = None) -> Dic
     if not delivered:
         logger.info("[OTP-DEV] %s -> %s", phone_number, otp)
 
-    return {
+    delivery = {
         "success": True,
         "expires_in": OTP_TTL_SECONDS,
         "delivery_method": delivery_method,
         "expires_at": expires_at,
     }
+    if delivery_method == "server-log":
+        delivery["code"] = otp
+    return delivery
 
 
 def verify_otp(phone_number: str, submitted_otp: str) -> tuple[bool, str]:

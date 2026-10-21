@@ -7,7 +7,9 @@ import {
   Users, 
   Settings,
   Sparkles,
-  Bot
+  QrCode,
+  Calculator,
+  ArrowDown,
 } from 'lucide-react'
 import { useAuthStore } from '../store'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -20,11 +22,13 @@ export default function Layout() {
   const { t } = useTranslation()
 
   const navItems = [
-    { to: '/dashboard', icon: Home, label: t('nav_home', 'Home') },
+    { to: '/', icon: Home, label: t('nav_home', 'Home') },
     { to: '/pay', icon: Send, label: t('nav_pay', 'Pay') },
+    { to: '/scan', icon: QrCode, label: t('nav_scan', 'Scan') },
+    { to: '/split', icon: Calculator, label: t('nav_split', 'Split') },
+    { to: '/request', icon: ArrowDown, label: t('nav_request', 'Request') },
     { to: '/history', icon: History, label: t('nav_history', 'History') },
     { to: '/guardian', icon: Users, label: t('nav_guardian', 'Guardian') },
-    { to: '/ai-chat', icon: Bot, label: t('nav_ai', 'AI') },
   ]
 
   return (

@@ -64,8 +64,8 @@ api.interceptors.response.use(
 
 // Auth API
 export const authAPI = {
-  requestOTP: (identifier: string) => api.post('/auth/request-otp', { phone_number: identifier }),
-  verifyOTP: (identifier: string, otp: string) => api.post('/auth/verify-otp', { phone_number: identifier, otp }),
+  requestOTP: (identifier: string) => api.post('/auth/request-otp', { phone_number: identifier, identifier }),
+  verifyOTP: (identifier: string, otp: string) => api.post('/auth/verify-otp', { phone_number: identifier, identifier, otp }),
   verifyFirebaseToken: (idToken: string) => api.post('/auth/verify-firebase-token', { id_token: idToken }),
   register: (data: { phone_number: string; full_name: string; upi_id?: string; email?: string; firebase_uid?: string }) =>
     api.post('/auth/register', data),
@@ -176,6 +176,13 @@ export const notificationsAPI = {
   markAllRead: () => api.post('/notifications/read-all'),
 }
 
+// User Profile API
+export const userAPI = {
+  getMe: () => api.get('/users/me'),
+  updateMe: (data: { full_name?: string; email?: string; phone_number?: string; preferred_language?: string }) =>
+    api.put('/users/me', data),
+}
+
 // Wallet/Sandbox Banking API
 export const walletAPI = {
   getBalance: (userId: string) => api.get(`/wallet/balance/${userId}`),
@@ -184,6 +191,8 @@ export const walletAPI = {
     api.get(`/wallet/transactions/${userId}`, { params: { limit } }),
   transfer: (userId: string, data: { recipient_upi: string; amount: number; note?: string }) =>
     api.post(`/wallet/transfer/${userId}`, data),
+  topUp: (userId: string, amount: number, note?: string) =>
+    api.post(`/wallet/topup/${userId}`, { amount, note }),
   adminSearch: (query: string) => 
     api.get('/wallet/admin/search', { params: { q: query } }),
   adminAllTransactions: (limit?: number) =>

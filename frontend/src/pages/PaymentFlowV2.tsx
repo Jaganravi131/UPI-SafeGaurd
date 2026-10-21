@@ -34,13 +34,17 @@ import {
   Wallet,
   Volume2,
   VolumeX,
-  Brain
+  Brain,
+  Plus,
+  Users,
+  X,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useKillSwitch, KillSwitchAlert } from '../components/KillSwitch'
 import AIInterventionModal, { AIIntervention } from '../components/AIInterventionModal'
 import QRScanner from '../components/QRScanner'
 import MyQRCode from '../components/MyQRCode'
+import ContactPicker from '../components/ContactPicker'
 import { transactionAPI, contactsAPI, walletAPI, interventionAPI, aiAPI } from '../api/client'
 import { useAuthStore, useUIStore } from '../store'
 import { useTranslation } from '../contexts/TranslationContext'
@@ -113,11 +117,12 @@ export default function PaymentFlowV2() {
   
   // Payment steps
   const [step, setStep] = useState<'input' | 'analyzing' | 'review'>('input')
-  const [paymentMethod, setPaymentMethod] = useState<'upi' | 'phone'>('upi')
+  const [paymentMethod, setPaymentMethod] = useState<'contacts' | 'upi' | 'phone'>('contacts')
   
   // QR Scanner
   const [showQRScanner, setShowQRScanner] = useState(false)
   const [showMyQR, setShowMyQR] = useState(false)
+  const [showContactPicker, setShowContactPicker] = useState(false)
   
   // Form state
   const [upiId, setUpiId] = useState('')
@@ -819,6 +824,15 @@ export default function PaymentFlowV2() {
             <label className="block text-sm font-medium text-gray-700 mb-2">{t('pay_send_to', 'Send To')}</label>
             <div className="flex bg-gray-100 rounded-lg p-1 mb-3">
               <button
+                onClick={() => { setPaymentMethod('contacts'); setFoundContact(null); setScammerAlert(null); }}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                  paymentMethod === 'contacts' ? 'bg-white shadow text-blue-600' : 'text-gray-600'
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                {t('pay_contacts', 'Contacts')}
+              </button>
+              <button
                 onClick={() => { setPaymentMethod('upi'); setFoundContact(null); setScammerAlert(null); }}
                 className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
                   paymentMethod === 'upi' ? 'bg-white shadow text-blue-600' : 'text-gray-600'
@@ -838,8 +852,67 @@ export default function PaymentFlowV2() {
               </button>
             </div>
 
+            {/* Contacts Picker */}
+            {paymentMethod === 'contacts' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-medium text-gray-900">{t('pay_choose_contact', 'Choose a contact')}</h3>
+                  <button
+                    onClick={() => setShowContactPicker(true)}
+                    className="btn-primary text-sm py-2 px-4 flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {t('pay_add_new', 'Add New')}
+                  </button>
+                </div>
+                {foundContact && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`p-4 rounded-xl border ${foundContact.is_verified ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${foundContact.is_verified ? 'bg-green-100' : 'bg-yellow-100'}`}>
+                          <User className={`w-6 h-6 ${foundContact.is_verified ? 'text-green-600' : 'text-yellow-600'}`} />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-900">{foundContact.name}</p>
+                          <p className="text-sm text-gray-600">{foundContact.upi_id}</p>
+                          {foundContact.trust_score && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                                foundContact.trust_score >= 80 ? 'bg-green-100 text-green-700' :
+                                foundContact.trust_score >= 60 ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-red-100 text-red-700'
+                              }`}>
+                                <Shield className="w-3 h-3 inline mr-0.5" />
+                                {foundContact.trust_score}%
+                              </span>
+                              {foundContact.is_verified && (
+                                <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                                  <CheckCircle className="w-3 h-3" />
+                                  Verified
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => { setFoundContact(null); setUpiId(''); }}
+                        className="text-gray-400 hover:text-gray-600 p-1"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            )}
+
             {/* Phone Search */}
-            {paymentMethod === 'phone' ? (
+            {paymentMethod === 'phone' && (
               <div className="space-y-3">
                 <div className="flex gap-2">
                   <div className="relative flex-1">
@@ -867,7 +940,7 @@ export default function PaymentFlowV2() {
                   </button>
                 </div>
 
-                {/* Results */}
+                {/* Phone Search Results */}
                 <AnimatePresence>
                   {foundContact && (
                     <motion.div
@@ -935,8 +1008,10 @@ export default function PaymentFlowV2() {
                   )}
                 </AnimatePresence>
               </div>
-            ) : (
-              /* UPI Input */
+            )}
+
+            {/* UPI Input */}
+            {paymentMethod === 'upi' && (
               <div className="space-y-3">
                 <div className="flex gap-2">
                   <div className="relative flex-1">
@@ -1012,6 +1087,12 @@ export default function PaymentFlowV2() {
                         </div>
                       </div>
                     </motion.div>
+                  )}
+
+                  {searchError && (
+                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-gray-500 text-center">
+                      {searchError}
+                    </motion.p>
                   )}
                 </AnimatePresence>
               </div>
@@ -1649,6 +1730,40 @@ export default function PaymentFlowV2() {
           userName={user.full_name}
         />
       )}
+
+      {/* Contact Picker Modal */}
+      <ContactPicker
+        isOpen={showContactPicker}
+        onClose={() => setShowContactPicker(false)}
+        onSelect={(contact) => {
+          if (contact.is_scammer) {
+            setScammerAlert({
+              is_scammer: true,
+              upi_id: contact.upi_id,
+              warning_message: contact.warning,
+            })
+            toast.error('🚨 This contact has been reported for fraud!')
+            speakAlert(
+              contact.warning || 'Danger! This contact has been reported for fraud. Do not send money.',
+              true
+            )
+            return
+          }
+          
+          setUpiId(contact.upi_id)
+          setFoundContact({
+            phone: contact.phone || '',
+            name: contact.name,
+            upi_id: contact.upi_id,
+            bank: '',
+            is_verified: contact.is_verified || false,
+            trust_score: contact.trust_score || 75,
+          })
+          toast.success(`Selected: ${contact.name}`)
+        }}
+        title={t('pay_choose_recipient', 'Choose Recipient')}
+        subtitle={t('pay_select_contact_subtitle', 'Select from recent or saved contacts')}
+      />
     </div>
   )
 }

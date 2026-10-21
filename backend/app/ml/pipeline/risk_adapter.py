@@ -18,6 +18,9 @@ class RiskAdapter:
         recipient_profile: Dict[str, Any],
     ) -> Dict[str, Any]:
         result = self.engine.assess(transaction_data, user_profile, recipient_profile)
+        # Mirror risk_score under the canonical response field name so local-mode
+        # results match the remote service contract (ensemble_score).
+        result.setdefault("ensemble_score", result.get("risk_score", 0.0))
         result.setdefault("risk_score", result.get("ensemble_score", 0.0))
         result.setdefault("recommended_action", "proceed")
         result.setdefault("require_guardian_approval", False)

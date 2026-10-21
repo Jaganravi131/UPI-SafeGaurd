@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useUIStore } from '../store'
 import { aiAPI } from '../api/client'
+import axios from 'axios'
 import toast from 'react-hot-toast'
 
 interface ChatMessage {
@@ -270,13 +271,19 @@ export default function AIChat() {
       setMessages(prev => [...prev, assistantMessage])
     } catch (error: any) {
       console.error('AI Chat error:', error)
+      const detail = axios.isAxiosError(error)
+        ? error.response?.data?.detail
+        : undefined
+      const errorContent = typeof detail === 'string'
+        ? detail
+        : 'Sorry, I encountered an error. Please try again.'
       const errorMessage: ChatMessage = {
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: errorContent,
         timestamp: new Date(),
       }
       setMessages(prev => [...prev, errorMessage])
-      toast.error('Failed to get AI response')
+      toast.error(typeof detail === 'string' ? detail : 'Failed to get AI response')
     } finally {
       setIsLoading(false)
     }

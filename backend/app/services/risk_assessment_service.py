@@ -8,13 +8,21 @@ from fastapi import Request
 from app.ml.pipeline.risk_adapter import RiskAdapter
 from app.db.database import get_mongodb
 from app.db.mongodb_models import MLFeaturesDocument
+from app.services.risk_service_client import RiskServiceClient
 
 
 class RiskAssessmentService:
     """Service for assessing transaction risk using ML models"""
     
-    def __init__(self, risk_adapter: RiskAdapter):
+    def __init__(
+        self,
+        risk_adapter: RiskAdapter,
+        remote_client: Optional[RiskServiceClient] = None,
+        use_remote: bool = False,
+    ):
         self.risk_adapter = risk_adapter
+        self.remote_client = remote_client
+        self.use_remote = use_remote
     
     async def assess_transaction(
         self,
@@ -35,12 +43,25 @@ class RiskAssessmentService:
         Returns:
             Risk assessment result with scores and recommendations
         """
-        # Run engine assessment
-        result = self.risk_adapter.assess(
-            transaction_data,
-            user_profile,
-            recipient_profile,
-        )
+        if self.use_remote and self.remote_client is not None:
+            remote_result = await self.remote_client.assess(
+                transaction_data,
+                user_profile,
+                recipient_profile,
+            )
+            result = remote_result.model_dump()
+            result["risk_score"] = result["risk_score"]
+            result["ensemble_score"] = result["risk_score"]
+            result["isolation_forest_score"] = 0.0
+            result["gnn_score"] = 0.0
+            result["sensor_score"] = 0.0
+            result["explanations"] = result["risk_factors"]
+        else:
+            result = self.risk_adapter.assess(
+                transaction_data,
+                user_profile,
+                recipient_profile,
+            )
         if sensor_data:
             result["sensor_score"] = float(sensor_data.get("stress_score", result.get("sensor_score", 0.0)))
         
@@ -133,7 +154,11 @@ class RiskAssessmentService:
 
 
 def get_risk_assessment_service(request: Request) -> RiskAssessmentService:
-    """FastAPI dependency that resolves the app-state RiskAdapter."""
+    """FastAPI dependency that resolves the configured app-state service."""
+    configured_service = getattr(request.app.state, "risk_assessment_service", None)
+    if configured_service is not None:
+        return configured_service
+
     risk_adapter = getattr(request.app.state, "risk_adapter", None)
     if risk_adapter is None:
         raise RuntimeError("Risk engine has not been loaded into app state.")

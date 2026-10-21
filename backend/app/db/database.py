@@ -99,7 +99,9 @@ async def init_postgres():
                 pass
         
         _engine = create_async_engine(
-            "sqlite+aiosqlite:///./demo_database.db",
+            # Honor the configured URL (env-driven) instead of a hardcoded path,
+            # so Docker volumes can persist the database across rebuilds.
+            settings.POSTGRES_URL or "sqlite+aiosqlite:///./demo_database.db",
             echo=settings.DEBUG,
         )
         

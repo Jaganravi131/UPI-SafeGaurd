@@ -347,6 +347,36 @@ async def create_transaction(
         wallet.balance = current_balance - float(request.amount)
         wallet.daily_spent = float(wallet.daily_spent or 0) + float(request.amount)
 
+        # If the recipient is another UPI SafeGuard user, credit their wallet
+        # and ledger the incoming payment so both sides see it.
+        try:
+            recipient_result = await db.execute(
+                select(User).where(User.upi_id == request.recipient_upi)
+            )
+            recipient = recipient_result.scalar_one_or_none()
+            if recipient and str(recipient.id) != str(user_id):
+                recipient_wallet_result = await db.execute(
+                    select(Wallet).where(Wallet.user_id == recipient.id)
+                )
+                recipient_wallet = recipient_wallet_result.scalar_one_or_none()
+                if not recipient_wallet:
+                    recipient_wallet = Wallet(user_id=recipient.id, balance=0.0, currency="INR")
+                    db.add(recipient_wallet)
+                    await db.flush()
+                recipient_wallet.balance = float(recipient_wallet.balance or 0) + float(request.amount)
+                db.add(Transaction(
+                    user_id=recipient.id,
+                    recipient_upi=user.upi_id or f"sender:{user.phone_number}",
+                    recipient_name=user.full_name,
+                    amount=request.amount,
+                    purpose=f"Payment received — {request.purpose}" if request.purpose else "Payment received",
+                    status=TransactionStatus.COMPLETED,
+                    risk_level=DBRiskLevel.LOW,
+                    completed_at=datetime.now(timezone.utc),
+                ))
+        except Exception as e:
+            logger.warning("Recipient wallet credit failed (payment still sent): %s", e)
+
     transaction = Transaction(
         user_id=user_id,
         recipient_upi=request.recipient_upi,

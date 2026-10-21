@@ -106,6 +106,11 @@ async def request_otp(request: OTPRequest, db: AsyncSession = Depends(get_db)):
         "expires_in": delivery["expires_in"],
         "delivery_method": delivery["delivery_method"],
     }
+    if settings.EXPOSE_DEMO_OTP and delivery.get("delivery_method") == "server-log":
+        response.update({
+            "is_demo": True,
+            "demo_otp": delivery["code"],
+        })
     return response
 
 
