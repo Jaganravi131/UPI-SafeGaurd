@@ -73,3 +73,15 @@ GET /api/v1/risk/model-info
 
 Returns the active AI model metadata through the core backend. The frontend
 should use the core backend as its only application API.
+
+## Environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| DATABASE_URL | jdbc:h2:mem:upi_safeguard | PostgreSQL JDBC URL in production |
+| AI_SERVICE_URL | http://localhost:8001 | Python ML risk-scoring service base URL |
+| GROQ_API_KEY | *(empty)* | Enables the AI endpoints (/api/v1/ai/*) — empty disables them with a 503 {detail} error |
+| GROQ_MODEL | llama-3.3-70b-versatile | Groq chat-completions model |
+| GROQ_BASE_URL | https://api.groq.com/openai/v1 | Groq OpenAI-compatible endpoint |
+| GROQ_TIMEOUT_MS | 20000 | Groq HTTP timeout |
+| DEMO_AI_FALLBACK | alse | When 	rue, /ai/chat answers with deterministic demo guidance instead of 503 while no API key is set |

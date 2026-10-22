@@ -18,6 +18,13 @@ risk:
     base-url: ${AI_SERVICE_URL:http://localhost:8001}
     timeout-ms: ${AI_SERVICE_TIMEOUT_MS:3000}
 
+groq:
+  base-url: ${GROQ_BASE_URL:https://api.groq.com/openai/v1}
+  api-key: ${GROQ_API_KEY:}
+  model: ${GROQ_MODEL:llama-3.3-70b-versatile}
+  timeout-ms: ${GROQ_TIMEOUT_MS:20000}
+  demo-fallback: ${DEMO_AI_FALLBACK:false}
+
 management:
   endpoints:
     web:
