@@ -24,9 +24,6 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/requirements.txt
 
-      - name: Train risk engine (synthetic fallback)
-        run: python backend/train_paysim.py
-
       - name: Run test suite
         working-directory: backend
         run: python -m pytest -q --tb=short

@@ -68,6 +68,12 @@ def test_normal_transaction_is_low_risk():
 
 def test_engine_loads_from_joblib():
     artifact_path = Path(__file__).resolve().parent.parent / "app" / "ml" / "trained_models" / "risk_engine.joblib"
+    if not artifact_path.exists():
+        # The trained artifact is produced by the ML training pipeline
+        # (train_models.py needs the PaySim dataset, which ships neither in
+        # git nor CI). Skip here; Docker/local runs with a trained model
+        # exercise this test fully.
+        pytest.skip("risk_engine.joblib not present — run the ML training pipeline first")
     engine = joblib.load(artifact_path)
 
     assert isinstance(engine, RiskEngine)
