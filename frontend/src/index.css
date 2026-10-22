@@ -79,18 +79,30 @@ body::before {
   .card {
     @apply bg-white/80 backdrop-blur-xl rounded-3xl shadow-card p-6 border border-white/50 transition-all duration-300;
   }
-  
+
   .card:hover {
     @apply shadow-card-hover;
   }
-  
+
   .card-glass {
     background: rgba(255, 255, 255, 0.6);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     @apply rounded-3xl border border-white/30 shadow-premium p-6 transition-all duration-300;
   }
-  
+
+  /* Graceful degradation: when glass blur is unavailable (GPU/compositing
+     quirks, extensions, older browsers) fall back to an opaque surface so
+     cards keep their shape instead of dissolving into floating shapes. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .card,
+    .card-glass {
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+
   .card-dark {
     @apply bg-gradient-to-br from-gray-900 to-gray-800 text-white rounded-3xl shadow-premium-lg p-6 border border-gray-700/50;
   }
@@ -266,4 +278,17 @@ body::before {
 
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
+}
+/* Utility: hide scrollbars on horizontal carousels (used by home/bills rows) */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Respect reduced-motion: entrance animations must never linger */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

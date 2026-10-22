@@ -497,11 +497,11 @@ export default function HomeScreen() {
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
             >
-              <Link to={`/bills?category=${category.id}`} className="card-glass p-4 text-center hover-lift group">
-                <div className={`${category.color} w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform`}>
+              <Link to={`/bills?category=${category.id}`} className="card-glass p-4 text-center hover-lift group block w-full min-w-0">
+                <div className={`${category.color} w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform flex-shrink-0`}>
                   <category.icon className="w-5 h-5" />
                 </div>
-                <span className="text-sm font-medium text-gray-700 group-hover:text-primary-600 transition-colors">
+                <span className="block text-sm font-medium text-gray-700 group-hover:text-primary-600 transition-colors truncate px-1">
                   {t(category.labelKey, category.label)}
                 </span>
               </Link>
@@ -528,7 +528,7 @@ export default function HomeScreen() {
               className="flex-shrink-0 w-64"
             >
               <div className="card-glass p-4 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-white/50 rounded-full blur-xl -translate-y-1/2 translate-x-1/2" />
+                <div className="absolute top-0 right-0 w-24 h-24 bg-white/30 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
                 <div className="relative">
                   <div className={`bg-gradient-to-br ${reward.color} w-12 h-12 rounded-xl flex items-center justify-center mb-3 text-white text-2xl`}>
                     {reward.icon}

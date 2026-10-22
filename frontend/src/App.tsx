@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import { Suspense, lazy } from 'react'
+import { MotionConfig } from 'framer-motion'
 import ErrorBoundary from './components/ErrorBoundary'
 import { TranslationProvider } from './contexts/TranslationContext'
 import Layout from './components/Layout'
@@ -47,6 +48,7 @@ import AdminRoute from './components/AdminRoute'
 function App() {
   return (
     <ErrorBoundary>
+    <MotionConfig reducedMotion="user">
     <TranslationProvider>
     <Suspense fallback={<LoadingSpinner />}>
     <Routes>
@@ -126,6 +128,7 @@ function App() {
     </Routes>
     </Suspense>
     </TranslationProvider>
+    </MotionConfig>
     </ErrorBoundary>
   )
 }
