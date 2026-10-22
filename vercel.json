@@ -1,4 +1,6 @@
 {
+    "buildCommand": "cd frontend && npm install --no-audit --no-fund && npm run build",
+    "outputDirectory": "frontend/dist",
     "rewrites": [
         {
             "source": "/api/v1/:path*",
@@ -8,16 +10,5 @@
             "source": "/(.*)",
             "destination": "/index.html"
         }
-    ],
-    "experimentalServices": {
-        "frontend": {
-            "entrypoint": "frontend",
-            "routePrefix": "/",
-            "framework": "vite"
-        },
-        "backend": {
-            "entrypoint": "backend",
-            "routePrefix": "/_/backend"
-        }
-    }
+    ]
 }
