@@ -36,6 +36,10 @@ risk:
 
 app:
   expose-demo-otp: ${APP_EXPOSE_DEMO_OTP:true}
+  # Demo admin bootstrap (POST /admin/auth/demo-login creates/enters the
+  # super admin from ADMIN_DEFAULT_PASSWORD). Disable in production once the
+  # real operator accounts exist.
+  expose-demo-admin: ${APP_EXPOSE_DEMO_ADMIN:true}
   # Cache/coordination driver: "memory" (single replica, zero infra) or "redis"
   # (shared across replicas; enables rate limiting + intervention state + cache).
   cache:
@@ -57,6 +61,12 @@ groq:
   model: ${GROQ_MODEL:llama-3.3-70b-versatile}
   timeout-ms: ${GROQ_TIMEOUT_MS:20000}
   demo-fallback: ${DEMO_AI_FALLBACK:false}
+
+jwt:
+  # Same env var the FastAPI backend reads — admin tokens issued by either
+  # backend validate on the other during the migration window.
+  secret: ${JWT_SECRET_KEY:default_demo_secret_key_change_in_production}
+  expiry-hours: ${JWT_EXPIRY_HOURS:24}
 
 management:
   endpoints:

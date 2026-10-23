@@ -32,21 +32,29 @@ public class AdminController {
     private final WalletRepository walletRepository;
     private final FraudReportRepository fraudReportRepository;
     private final PaymentTransactionRepository transactionRepository;
+    private final com.upisafeguard.core.admin.AdminAuthSupport adminAuth;
+
+    /** Roles allowed for user-matching mutations — mirrors backend/app/api/routes/admin.py. */
+    private static final java.util.Set<String> MANAGER_ROLES = java.util.Set.of("super_admin", "admin");
 
     @Autowired
     public AdminController(UserRepository userRepository,
                           WalletRepository walletRepository,
                           FraudReportRepository fraudReportRepository,
-                          PaymentTransactionRepository transactionRepository) {
+                          PaymentTransactionRepository transactionRepository,
+                          com.upisafeguard.core.admin.AdminAuthSupport adminAuth) {
         this.userRepository = userRepository;
         this.walletRepository = walletRepository;
         this.fraudReportRepository = fraudReportRepository;
         this.transactionRepository = transactionRepository;
+        this.adminAuth = adminAuth;
     }
 
     // Dashboard
     @GetMapping("/dashboard/overview")
-    public ResponseEntity<AdminDashboardResponse> getDashboardOverview() {
+    public ResponseEntity<AdminDashboardResponse> getDashboardOverview(
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        adminAuth.requireAdmin(authHeader);
         long totalUsers = userRepository.count();
         long totalWallets = walletRepository.count();
         long totalTransactions = transactionRepository.count();
@@ -60,10 +68,12 @@ public class AdminController {
     // Users
     @GetMapping("/users")
     public ResponseEntity<Page<User>> getUsers(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(name = "page_size", defaultValue = "20") int pageSize,
             @RequestParam(required = false) String search) {
-        
+
+        adminAuth.requireAdmin(authHeader);
         Pageable pageable = PageRequest.of(page, pageSize);
         Page<User> users;
         
@@ -84,7 +94,10 @@ public class AdminController {
     }
 
     @GetMapping("/users/{userId}")
-    public ResponseEntity<User> getUserDetails(@PathVariable String userId) {
+    public ResponseEntity<User> getUserDetails(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String userId) {
+        adminAuth.requireAdmin(authHeader);
         try {
             UUID uuid = UUID.fromString(userId);
             Optional<User> userOpt = userRepository.findById(uuid);
@@ -95,7 +108,10 @@ public class AdminController {
     }
 
     @PutMapping("/users/{userId}/security-score")
-    public ResponseEntity<Void> updateSecurityScore(@PathVariable String userId, @RequestParam double securityScore) {
+    public ResponseEntity<Void> updateSecurityScore(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String userId, @RequestParam(name = "security_score") double securityScore) {
+        adminAuth.requireRole(authHeader, MANAGER_ROLES);
         try {
             UUID uuid = UUID.fromString(userId);
             Optional<User> userOpt = userRepository.findById(uuid);
@@ -112,7 +128,10 @@ public class AdminController {
     }
 
     @PutMapping("/users/{userId}/status")
-    public ResponseEntity<Void> updateUserStatus(@PathVariable String userId, @RequestParam boolean isActive) {
+    public ResponseEntity<Void> updateUserStatus(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String userId, @RequestParam(name = "is_active") boolean isActive) {
+        adminAuth.requireRole(authHeader, MANAGER_ROLES);
         try {
             UUID uuid = UUID.fromString(userId);
             Optional<User> userOpt = userRepository.findById(uuid);
@@ -129,7 +148,10 @@ public class AdminController {
     }
 
     @PutMapping("/users/{userId}/edit")
-    public ResponseEntity<Void> editUser(@PathVariable String userId, @RequestBody UserEditRequest request) {
+    public ResponseEntity<Void> editUser(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String userId, @RequestBody UserEditRequest request) {
+        adminAuth.requireRole(authHeader, MANAGER_ROLES);
         try {
             UUID uuid = UUID.fromString(userId);
             Optional<User> userOpt = userRepository.findById(uuid);
@@ -155,10 +177,11 @@ public class AdminController {
     // Fraud Reports
     @GetMapping("/fraud-reports")
     public ResponseEntity<Page<FraudReport>> getFraudReports(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(name = "page_size", defaultValue = "20") int pageSize,
             @RequestParam(required = false) String status) {
-        
+
         Pageable pageable = PageRequest.of(page, pageSize);
         Page<FraudReport> reports;
         
@@ -172,7 +195,10 @@ public class AdminController {
     }
 
     @PutMapping("/fraud-reports/{reportId}/status")
-    public ResponseEntity<Void> updateReportStatus(@PathVariable String reportId, @RequestParam String status) {
+    public ResponseEntity<Void> updateReportStatus(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String reportId, @RequestParam String status) {
+        adminAuth.requireAdmin(authHeader);
         try {
             UUID uuid = UUID.fromString(reportId);
             Optional<FraudReport> reportOpt = fraudReportRepository.findById(uuid);
@@ -191,9 +217,11 @@ public class AdminController {
     // Transactions
     @GetMapping("/transactions/flagged")
     public ResponseEntity<Page<PaymentTransaction>> getFlaggedTransactions(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int pageSize) {
-        
+            @RequestParam(name = "page_size", defaultValue = "20") int pageSize) {
+
+        adminAuth.requireAdmin(authHeader);
         Pageable pageable = PageRequest.of(page, pageSize);
         Page<PaymentTransaction> transactions = transactionRepository.findByStatusIn(
                 List.of("blocked", "failed", "guardian_pending"), pageable);

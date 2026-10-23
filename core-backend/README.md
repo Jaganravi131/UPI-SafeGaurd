@@ -100,9 +100,10 @@ The service calls the Python AI service at `http://localhost:8001` by default
 
 ## Known gaps / next steps
 
-- **Admin auth** — `/admin/*` endpoints exist but are not yet protected by an
-  admin login + RBAC (`super_admin`/`admin`/`analyst`/`support`) — porting from
-  `backend/app/api/routes/admin_auth.py` next.
+- Admin console auth is now live (`/admin/auth/*` + role guards on `/admin/*`
+  and `/wallet/admin/*`, roles `super_admin`/`admin`/`analyst`/`support`,
+  bcrypt-shared with the Python backend). Remaining: `/admin/activity-logs`
+  listing, exports, and model-config endpoints from the Python surface.
 - Migration discipline: `ddl-auto=update` locally; production should move to
   versioned Flyway migrations.
 - Redis fail-open circuit breaker and transactional Kafka outbox (roadmap in

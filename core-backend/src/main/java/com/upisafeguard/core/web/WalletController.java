@@ -36,6 +36,7 @@ public class WalletController {
     private final UserRepository userRepository;
     private final WalletRepository walletRepository;
     private final AuthSupport authSupport;
+    private final com.upisafeguard.core.admin.AdminAuthSupport adminSupport;
     private final com.upisafeguard.core.events.DomainEventPublisher events;
     private final com.upisafeguard.core.services.RateLimitService rateLimitService;
 
@@ -46,6 +47,7 @@ public class WalletController {
             UserRepository userRepository,
             WalletRepository walletRepository,
             AuthSupport authSupport,
+            com.upisafeguard.core.admin.AdminAuthSupport adminSupport,
             com.upisafeguard.core.events.DomainEventPublisher events,
             com.upisafeguard.core.services.RateLimitService rateLimitService) {
         this.walletMoneyService = walletMoneyService;
@@ -53,6 +55,7 @@ public class WalletController {
         this.userRepository = userRepository;
         this.walletRepository = walletRepository;
         this.authSupport = authSupport;
+        this.adminSupport = adminSupport;
         this.events = events;
         this.rateLimitService = rateLimitService;
     }
@@ -221,7 +224,7 @@ public class WalletController {
             @RequestParam("q") String query,
             @RequestParam(defaultValue = "10") int limit,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
-        authSupport.requireUserId(authHeader);
+        adminSupport.requireAdmin(authHeader);
         String safeQuery = query == null ? "" : query.trim();
         int safeLimit = Math.min(Math.max(limit, 1), 50);
 
@@ -253,7 +256,7 @@ public class WalletController {
     public ResponseEntity<?> adminAllTransactions(
             @RequestParam(required = false, name = "limit") Integer limit,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
-        authSupport.requireUserId(authHeader);
+        adminSupport.requireAdmin(authHeader);
         int safeLimit = limit == null ? 50 : Math.min(Math.max(limit, 1), 200);
 
         List<Map<String, Object>> rows = transactionRepository
