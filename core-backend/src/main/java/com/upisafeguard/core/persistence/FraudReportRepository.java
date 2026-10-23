@@ -16,4 +16,9 @@ public interface FraudReportRepository extends JpaRepository<FraudReport, UUID> 
 
     @Query("SELECT f FROM FraudReport f WHERE f.reporter.id = :userId ORDER BY f.createdAt DESC")
     Page<FraudReport> findByReporterId(@Param("userId") String userId, Pageable pageable);
+
+    /** Community-intelligence lookup for the security shield (case-insensitive UPI match). */
+    long countByScammerUpiEqualsIgnoreCase(String scammerUpi);
+
+    List<FraudReport> findTop3ByScammerUpiEqualsIgnoreCaseOrderByCreatedAtDesc(String scammerUpi);
 }
