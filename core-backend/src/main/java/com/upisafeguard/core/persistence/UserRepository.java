@@ -1,5 +1,6 @@
 package com.upisafeguard.core.persistence;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,4 +16,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByEmail(String email);
     boolean existsByUpiId(String upiId);
     Optional<User> findByUpiId(String upiId);
+
+    @Query("""
+            SELECT u FROM User u WHERE
+            LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%')) OR
+            LOWER(u.fullName) LIKE LOWER(CONCAT('%', :query, '%')) OR
+            LOWER(u.upiId) LIKE LOWER(CONCAT('%', :query, '%')) OR
+            u.phoneNumber LIKE CONCAT('%', :query, '%')
+            """)
+    List<User> searchUsers(@Param("query") String query, Pageable pageable);
 }

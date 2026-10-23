@@ -18,4 +18,7 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     @Query("SELECT t FROM PaymentTransaction t WHERE t.status IN :statuses")
     Page<PaymentTransaction> findByStatusIn(@Param("statuses") List<String> statuses, Pageable pageable);
+
+    @Query("SELECT t FROM PaymentTransaction t ORDER BY t.createdAt DESC")
+    List<PaymentTransaction> findAllByOrderByCreatedAtDesc(Pageable pageable);
 }

@@ -147,7 +147,10 @@ class AiServiceTest {
     @Test
     void translateUiMapsBackByKeys() {
         AiService ai = service(clientReturning("1. होम\n2. भुगतान"), false);
-        assertThat(ai.translateUi(new java.util.LinkedHashMap<>(Map.of("nav_home", "Home", "nav_pay", "Pay")), "hi"))
+        Map<String, String> ordered = new java.util.LinkedHashMap<>(); // deterministic order (Map.of is not)
+        ordered.put("nav_home", "Home");
+        ordered.put("nav_pay", "Pay");
+        assertThat(ai.translateUi(ordered, "hi"))
                 .containsEntry("nav_home", "होम")
                 .containsEntry("nav_pay", "भुगतान");
     }

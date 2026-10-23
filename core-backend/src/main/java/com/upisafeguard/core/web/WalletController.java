@@ -3,7 +3,9 @@ package com.upisafeguard.core.web;
 import com.upisafeguard.core.persistence.PaymentTransaction;
 import com.upisafeguard.core.persistence.PaymentTransactionRepository;
 import com.upisafeguard.core.persistence.User;
+import com.upisafeguard.core.persistence.UserRepository;
 import com.upisafeguard.core.persistence.Wallet;
+import com.upisafeguard.core.persistence.WalletRepository;
 import com.upisafeguard.core.wallet.WalletMoneyService;
 import com.upisafeguard.core.wallet.WalletMoneyService.TopUpResult;
 import com.upisafeguard.core.wallet.WalletMoneyService.TransferResult;
@@ -29,15 +31,21 @@ public class WalletController {
 
     private final WalletMoneyService walletMoneyService;
     private final PaymentTransactionRepository transactionRepository;
+    private final UserRepository userRepository;
+    private final WalletRepository walletRepository;
     private final AuthSupport authSupport;
 
     @Autowired
     public WalletController(
             WalletMoneyService walletMoneyService,
             PaymentTransactionRepository transactionRepository,
+            UserRepository userRepository,
+            WalletRepository walletRepository,
             AuthSupport authSupport) {
         this.walletMoneyService = walletMoneyService;
         this.transactionRepository = transactionRepository;
+        this.userRepository = userRepository;
+        this.walletRepository = walletRepository;
         this.authSupport = authSupport;
     }
 
@@ -172,6 +180,69 @@ public class WalletController {
         row.put("risk_level", txn.getRiskLevel() == null ? "low" : txn.getRiskLevel().toLowerCase());
         row.put("created_at", txn.getCreatedAt() == null ? null : txn.getCreatedAt().toString());
         row.put("type", credit ? "credit" : "debit");
+        return row;
+    }
+
+    // ── Admin listings (called by the admin console frontend; absent from
+    // the FastAPI reference — first backend to serve these) ────────────────
+
+    /** Search users by name/email/UPI ID/phone for the admin console. */
+    @GetMapping("/admin/search")
+    public ResponseEntity<?> adminSearch(
+            @RequestParam("q") String query,
+            @RequestParam(defaultValue = "10") int limit,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        authSupport.requireUserId(authHeader);
+        String safeQuery = query == null ? "" : query.trim();
+        int safeLimit = Math.min(Math.max(limit, 1), 50);
+
+        List<Map<String, Object>> users = userRepository
+                .searchUsers(safeQuery, PageRequest.of(0, safeLimit))
+                .stream()
+                .map(user -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", user.getId().toString());
+                    row.put("full_name", user.getFullName());
+                    row.put("email", user.getEmail());
+                    row.put("phone_number", user.getPhoneNumber());
+                    row.put("upi_id", user.getUpiId());
+                    Wallet wallet = walletRepository.findByUserId(user.getId().toString()).orElse(null);
+                    row.put("balance", wallet == null ? null : wallet.getBalance());
+                    row.put("is_active", user.getIsActive());
+                    return row;
+                })
+                .toList();
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("users", users);
+        body.put("count", users.size());
+        return ResponseEntity.ok(body);
+    }
+
+    /** All wallet transactions platform-wide, newest first. */
+    @GetMapping("/admin/all-transactions")
+    public ResponseEntity<?> adminAllTransactions(
+            @RequestParam(required = false, name = "limit") Integer limit,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        authSupport.requireUserId(authHeader);
+        int safeLimit = limit == null ? 50 : Math.min(Math.max(limit, 1), 200);
+
+        List<Map<String, Object>> rows = transactionRepository
+                .findAllByOrderByCreatedAtDesc(PageRequest.of(0, safeLimit))
+                .stream()
+                .map(this::adminTransactionRow)
+                .toList();
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("transactions", rows);
+        body.put("count", rows.size());
+        return ResponseEntity.ok(body);
+    }
+
+    /** Same shape as {@link #transactionRow} plus the owning user for admin views. */
+    private Map<String, Object> adminTransactionRow(PaymentTransaction txn) {
+        Map<String, Object> row = transactionRow(txn);
+        row.put("user_id", txn.getUserId());
         return row;
     }
 
