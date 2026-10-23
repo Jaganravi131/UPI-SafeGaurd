@@ -48,9 +48,46 @@ services:
       - DATABASE_PASSWORD=upi_safeguard_dev
       - JPA_DDL_AUTO=update
       - APP_EXPOSE_DEMO_OTP=true
+      # Redis-backed coordination: rate limiting + intervention state across replicas
+      - APP_CACHE_DRIVER=redis
+      - REDIS_HOST=redis
+      # Event streaming: transaction/fraud/intervention events → notification fanout
+      - APP_KAFKA_ENABLED=true
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     depends_on:
       - ai-service
       - postgres
+      - redis
+      - kafka
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+
+  kafka:
+    image: apache/kafka:3.9.0
+    ports:
+      - "${KAFKA_HOST_PORT:-9092}:9092"
+    environment:
+      # Single-node KRaft cluster (no ZooKeeper) for local development
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+    volumes:
+      - kafka-data:/var/lib/kafka/data
 
   postgres:
     image: postgres:16-alpine
@@ -79,3 +116,5 @@ volumes:
   sqlite-data:
   backend-ml:
   postgres-data:
+  redis-data:
+  kafka-data:

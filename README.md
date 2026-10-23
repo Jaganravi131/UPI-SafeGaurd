@@ -97,14 +97,18 @@ backend/           FastAPI backend (transitional; the API contract reference)
   train_*.py       PaySim (XGBoost) + behavioral (LightGBM) model training
   tests/           Pytest suite (CI)
 
-core-backend/      Spring Boot service — future production core (Java 21)
+core-backend/      Spring Boot service — production core (Java 21)
   ai/              Groq client + 8 /ai endpoints (1:1 port of ai.py)
+  intervention/    Agentic intervention engine (1:1 port of ai_intervention_service.py)
+  challenges/     Gamification endpoints (1:1 port of challenge.py)
+  cache/           Redis / in-process drivers: rate limiting + shared state
+  events/          Kafka domain events (transactions, fraud, interventions)
   wallet/ payment/ Double-entry wallet commands & payment flow
   web/             Controllers in FastAPI-compatible shapes
   persistence/     JPA entities (H2 locally, PostgreSQL in prod)
 
-docs/              Build plan, full-stack architecture, API guide, model charts
-docker-compose.yml Full local topology (5 services + Postgres)
+docs/              Build plan, full-stack architecture, system design, API guide, model charts
+docker-compose.yml Full local topology (7 services: + Redis & KRaft Kafka)
 render.yaml        Render Blueprint for the backend
 ```
 
@@ -251,6 +255,7 @@ The deeper migration plan lives in [`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md).
 
 ## Documentation
 
+- [System design (NEW)](docs/system-design.md) — Redis + Kafka architecture, event contracts, failure modes, scaling plan
 - [Build plan](docs/BUILD_PLAN.md) — service topology & migration milestones
 - [Full-stack architecture](docs/FULL_STACK_ARCHITECTURE.md) — system design deep-dive
 - [Architecture, API & design guide](docs/PROJECT_ARCHITECTURE_AND_API_GUIDE.md) — endpoint contracts

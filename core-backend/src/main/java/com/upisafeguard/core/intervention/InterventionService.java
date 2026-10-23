@@ -7,10 +7,14 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.upisafeguard.core.cache.CacheService;
 
 /**
  * In-memory port of backend/app/services/ai_intervention_service.py — the AI
@@ -49,15 +53,24 @@ public class InterventionService {
             "high_amount_new",
             "Common pattern: Scammers request large amounts claiming urgency. 78% of frauds involve amounts > ₹10,000.");
 
-    /** intervention_id → serialised intervention (mirrors active_interventions). */
-    private final Map<String, Map<String, Object>> activeInterventions = new ConcurrentHashMap<>();
+    /** intervention_id → serialised intervention. Redis hash when the cache
+     * driver is redis (visible across replicas), memory-local otherwise. */
+    private static final String ACTIVE_KEY = "upi:interventions:active";
+
+    private final CacheService cache;
+    private final ObjectMapper mapper;
+
+    public InterventionService(CacheService cache, ObjectMapper mapper) {
+        this.cache = cache;
+        this.mapper = mapper;
+    }
 
     public boolean isKnownIntervention(String interventionId) {
-        return activeInterventions.containsKey(interventionId);
+        return cache.hget(ACTIVE_KEY, interventionId).isPresent();
     }
 
     public int activeCount() {
-        return activeInterventions.size();
+        return cache.hgetall(ACTIVE_KEY).size();
     }
 
     // ── Level determination ──────────────────────────────────────────────
@@ -269,13 +282,13 @@ public class InterventionService {
         intervention.put("educational_tip", education[0]);
         intervention.put("scam_example", education[1]);
 
-        activeInterventions.put((String) intervention.get("intervention_id"), intervention);
+        store(intervention);
         return intervention;
     }
 
     public Map<String, Object> resolveIntervention(
             String interventionId, Map<String, String> userResponses, boolean guardianApproved) {
-        Map<String, Object> intervention = activeInterventions.remove(interventionId);
+        Map<String, Object> intervention = takeStored(interventionId);
         if (intervention == null) {
             Map<String, Object> error = new LinkedHashMap<>();
             error.put("success", false);
@@ -314,7 +327,7 @@ public class InterventionService {
     }
 
     public Map<String, Object> cancelIntervention(String interventionId) {
-        if (activeInterventions.remove(interventionId) != null) {
+        if (takeStored(interventionId) != null) {
             Map<String, Object> ok = new LinkedHashMap<>();
             ok.put("success", true);
             ok.put("message", "Intervention cancelled, transaction aborted");
@@ -329,12 +342,48 @@ public class InterventionService {
 
     public List<Map<String, Object>> activeForUser(String userId) {
         List<Map<String, Object>> result = new ArrayList<>();
-        for (Map<String, Object> intervention : activeInterventions.values()) {
-            if (userId != null && userId.equals(intervention.get("user_id"))) {
+        for (String stored : cache.hgetall(ACTIVE_KEY).values()) {
+            Map<String, Object> intervention = fromJson(stored);
+            if (intervention != null
+                    && userId != null && userId.equals(intervention.get("user_id"))) {
                 result.add(intervention);
             }
         }
         return result;
+    }
+
+    // ── Registry storage helpers ─────────────────────────────────────────
+
+    private void store(Map<String, Object> intervention) {
+        String id = String.valueOf(intervention.get("intervention_id"));
+        cache.hput(ACTIVE_KEY, id, toJson(intervention));
+    }
+
+    /** HGET + HDEL; single-use semantics for resolve/cancel. */
+    private Map<String, Object> takeStored(String interventionId) {
+        Optional<String> stored = cache.hget(ACTIVE_KEY, interventionId);
+        if (stored.isEmpty()) {
+            return null;
+        }
+        cache.hdelete(ACTIVE_KEY, interventionId);
+        return fromJson(stored.get());
+    }
+
+    private String toJson(Map<String, Object> intervention) {
+        try {
+            return mapper.writeValueAsString(intervention);
+        } catch (Exception exception) {
+            throw new IllegalStateException("Failed to serialise intervention", exception);
+        }
+    }
+
+    private Map<String, Object> fromJson(String stored) {
+        try {
+            // JSON round-trip can turn any element into Map/List — re-cast lists.
+            return mapper.readValue(stored, new TypeReference<LinkedHashMap<String, Object>>() { });
+        } catch (Exception exception) {
+            return null;
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

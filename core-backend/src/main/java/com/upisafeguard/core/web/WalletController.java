@@ -1,5 +1,7 @@
 package com.upisafeguard.core.web;
 
+import com.upisafeguard.core.events.EventPublisherConfig;
+import com.upisafeguard.core.events.EventTopics;
 import com.upisafeguard.core.persistence.PaymentTransaction;
 import com.upisafeguard.core.persistence.PaymentTransactionRepository;
 import com.upisafeguard.core.persistence.User;
@@ -34,6 +36,8 @@ public class WalletController {
     private final UserRepository userRepository;
     private final WalletRepository walletRepository;
     private final AuthSupport authSupport;
+    private final com.upisafeguard.core.events.DomainEventPublisher events;
+    private final com.upisafeguard.core.services.RateLimitService rateLimitService;
 
     @Autowired
     public WalletController(
@@ -41,12 +45,16 @@ public class WalletController {
             PaymentTransactionRepository transactionRepository,
             UserRepository userRepository,
             WalletRepository walletRepository,
-            AuthSupport authSupport) {
+            AuthSupport authSupport,
+            com.upisafeguard.core.events.DomainEventPublisher events,
+            com.upisafeguard.core.services.RateLimitService rateLimitService) {
         this.walletMoneyService = walletMoneyService;
         this.transactionRepository = transactionRepository;
         this.userRepository = userRepository;
         this.walletRepository = walletRepository;
         this.authSupport = authSupport;
+        this.events = events;
+        this.rateLimitService = rateLimitService;
     }
 
     @GetMapping("/balance/{userId}")
@@ -125,9 +133,21 @@ public class WalletController {
         String tokenUser = authSupport.requireUserId(authHeader);
         User user = walletMoneyService.getUserOr404(userId);
         authSupport.assertOwner(tokenUser, user.getId().toString());
+        rateLimitService.transfer(user.getId().toString());
 
         TransferResult result = walletMoneyService.transfer(
                 user, request.getRecipientUpi(), request.getAmount(), request.getNote());
+
+        // Fan out the completion event (notifications etc.); fire-and-forget.
+        events.publish(EventTopics.TRANSACTION_COMPLETED, user.getId().toString(),
+                EventPublisherConfig.envelope("TRANSACTION_COMPLETED", Map.of(
+                        "user_id", user.getId().toString(),
+                        "kind", "transfer",
+                        "transaction_id", result.ledger().transactionId().toString(),
+                        "amount", request.getAmount().toPlainString(),
+                        "recipient_upi", request.getRecipientUpi(),
+                        "recipient_name", result.recipientName() == null ? "" : result.recipientName(),
+                        "currency", result.currency())));
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("success", true);
@@ -147,8 +167,17 @@ public class WalletController {
         String tokenUser = authSupport.requireUserId(authHeader);
         User user = walletMoneyService.getUserOr404(userId);
         authSupport.assertOwner(tokenUser, user.getId().toString());
+        rateLimitService.transfer(user.getId().toString());
 
         TopUpResult result = walletMoneyService.topUp(user, request.getAmount(), request.getNote());
+
+        events.publish(EventTopics.TRANSACTION_COMPLETED, user.getId().toString(),
+                EventPublisherConfig.envelope("TRANSACTION_COMPLETED", Map.of(
+                        "user_id", user.getId().toString(),
+                        "kind", "topup",
+                        "transaction_id", result.ledger().transactionId().toString(),
+                        "amount", request.getAmount().toPlainString(),
+                        "currency", result.currency())));
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("success", true);

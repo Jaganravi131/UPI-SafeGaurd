@@ -4,6 +4,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.upisafeguard.core.events.DomainEventPublisher;
+import com.upisafeguard.core.events.EventPublisherConfig;
+import com.upisafeguard.core.events.EventTopics;
 import com.upisafeguard.core.intervention.InterventionService;
 
 import jakarta.validation.Valid;
@@ -39,10 +42,12 @@ public class InterventionController {
             "critical", "Full block + guardian notification");
 
     private final InterventionService interventionService;
+    private final com.upisafeguard.core.events.DomainEventPublisher events;
 
     @Autowired
-    public InterventionController(InterventionService interventionService) {
+    public InterventionController(InterventionService interventionService, DomainEventPublisher events) {
         this.interventionService = interventionService;
+        this.events = events;
     }
 
     @PostMapping("/check")
@@ -55,6 +60,15 @@ public class InterventionController {
                 request.getTransactionData());
 
         if (intervention != null) {
+            // Event fanout: alerting/analytics subscribers react asynchronously.
+            events.publish(com.upisafeguard.core.events.EventTopics.INTERVENTION_RAISED,
+                    request.getUserId(),
+                    com.upisafeguard.core.events.EventPublisherConfig.envelope("INTERVENTION_RAISED", java.util.Map.of(
+                            "intervention_id", String.valueOf(intervention.get("intervention_id")),
+                            "user_id", request.getUserId(),
+                            "transaction_id", request.getTransactionId(),
+                            "intervention_level", String.valueOf(intervention.get("intervention_level")),
+                            "risk_score", request.getRiskScore() == null ? 0.0 : request.getRiskScore())));
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("intervention_required", true);
             body.put("intervention", intervention);

@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.upisafeguard.core.cache.InMemoryCacheService;
 import com.upisafeguard.core.intervention.InterventionService;
 
 /** HTTP contract tests for /api/v1/intervention/* — mirrors intervention.py. */
@@ -27,7 +28,9 @@ class InterventionControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new InterventionController(new InterventionService()))
+        mockMvc = MockMvcBuilders.standaloneSetup(new InterventionController(
+                        new InterventionService(new InMemoryCacheService(), new ObjectMapper()),
+                        (topic, key, payload) -> { /* no-op publisher */ }))
                 .build();
     }
 

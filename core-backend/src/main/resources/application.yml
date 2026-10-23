@@ -8,6 +8,22 @@ spring:
     url: ${DATABASE_URL:jdbc:h2:mem:upi_safeguard;MODE=PostgreSQL;DB_CLOSE_DELAY=-1}
     username: ${DATABASE_USERNAME:sa}
     password: ${DATABASE_PASSWORD:}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:upi-safeguard-core}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: latest
+      enable-auto-commit: false
   jpa:
     hibernate:
       ddl-auto: ${JPA_DDL_AUTO:update}
@@ -17,6 +33,23 @@ risk:
   service:
     base-url: ${AI_SERVICE_URL:http://localhost:8001}
     timeout-ms: ${AI_SERVICE_TIMEOUT_MS:3000}
+
+app:
+  expose-demo-otp: ${APP_EXPOSE_DEMO_OTP:true}
+  # Cache/coordination driver: "memory" (single replica, zero infra) or "redis"
+  # (shared across replicas; enables rate limiting + intervention state + cache).
+  cache:
+    driver: ${APP_CACHE_DRIVER:memory}
+  rate-limit:
+    enabled: ${APP_RATE_LIMIT_ENABLED:true}
+    otp-requests-per-minute: ${RATE_LIMIT_OTP_PER_MINUTE:5}
+    otp-verifications-per-minute: ${RATE_LIMIT_OTP_VERIFY_PER_MINUTE:10}
+    transfers-per-minute: ${RATE_LIMIT_TRANSFERS_PER_MINUTE:60}
+    fraud-reports-per-minute: ${RATE_LIMIT_FRAUD_PER_MINUTE:10}
+  kafka:
+    # Event streaming (transaction + fraud + intervention events). Disabled by
+    # default so single-node deployments and tests run without a broker.
+    enabled: ${APP_KAFKA_ENABLED:false}
 
 groq:
   base-url: ${GROQ_BASE_URL:https://api.groq.com/openai/v1}

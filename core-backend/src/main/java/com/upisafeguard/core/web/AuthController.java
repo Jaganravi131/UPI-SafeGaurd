@@ -35,6 +35,8 @@ public class AuthController {
     private final AssessmentTokenService assessmentTokenService;
     private final JwtConfig jwtConfig;
 
+    private final com.upisafeguard.core.services.RateLimitService rateLimitService;
+
     /** Demo mode: expose the generated OTP in the response. Disabled in production via config. */
     @org.springframework.beans.factory.annotation.Value("${app.expose-demo-otp:true}")
     private boolean exposeDemoOtp;
@@ -45,17 +47,20 @@ public class AuthController {
             UserRepository userRepository,
             WalletRepository walletRepository,
             AssessmentTokenService assessmentTokenService,
-            JwtConfig jwtConfig) {
+            JwtConfig jwtConfig,
+            com.upisafeguard.core.services.RateLimitService rateLimitService) {
         this.otpService = otpService;
         this.userRepository = userRepository;
         this.walletRepository = walletRepository;
         this.assessmentTokenService = assessmentTokenService;
         this.jwtConfig = jwtConfig;
+        this.rateLimitService = rateLimitService;
     }
 
     @PostMapping("/request-otp")
     public ResponseEntity<OTPRequestDTO.Response> requestOTP(@Valid @RequestBody OTPRequestDTO.Request request) {
         String identifier = request.getIdentifier(); // email or phone
+        rateLimitService.otpRequest(identifier);
         String otpCode = otpService.generateAndStoreOTP(identifier);
 
         String message = exposeDemoOtp
@@ -69,7 +74,8 @@ public class AuthController {
     public ResponseEntity<AuthResponseDTO> verifyOTP(@Valid @RequestBody OTPVerifyDTO request) {
         String identifier = request.getIdentifier(); // email or phone
         String otp = request.getOtp();
-        
+        rateLimitService.otpVerify(identifier);
+
         boolean valid = otpService.verifyOTP(identifier, otp);
         if (!valid) {
             return ResponseEntity.badRequest()

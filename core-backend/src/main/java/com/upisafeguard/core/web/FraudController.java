@@ -21,11 +21,19 @@ public class FraudController {
 
     private final FraudReportRepository fraudReportRepository;
     private final UserRepository userRepository;
+    private final com.upisafeguard.core.events.DomainEventPublisher events;
+    private final com.upisafeguard.core.services.RateLimitService rateLimitService;
 
     @Autowired
-    public FraudController(FraudReportRepository fraudReportRepository, UserRepository userRepository) {
+    public FraudController(
+            FraudReportRepository fraudReportRepository,
+            UserRepository userRepository,
+            com.upisafeguard.core.events.DomainEventPublisher events,
+            com.upisafeguard.core.services.RateLimitService rateLimitService) {
         this.fraudReportRepository = fraudReportRepository;
         this.userRepository = userRepository;
+        this.events = events;
+        this.rateLimitService = rateLimitService;
     }
 
     @PostMapping("/analyze")
@@ -48,7 +56,7 @@ public class FraudController {
         }
 
         User reporter = reporterOpt.get();
-
+        rateLimitService.fraudReport(reporter.getId().toString());
         FraudReport report = new FraudReport();
         report.setReporter(reporter);
         report.setScammerUpi(request.getScammerUpi());
@@ -66,6 +74,15 @@ public class FraudController {
         report.setStatus("submitted");
 
         fraudReportRepository.save(report);
+
+        events.publish("upi.fraud.flagged", reporter.getId().toString(),
+                com.upisafeguard.core.events.EventPublisherConfig.envelope("FRAUD_REPORTED", java.util.Map.of(
+                        "user_id", reporter.getId().toString(),
+                        "report_id", report.getId().toString(),
+                        "scammer_upi", String.valueOf(request.getScammerUpi()),
+                        "scam_type", String.valueOf(request.getScamType()),
+                        "amount_lost", request.getAmountLost() == null ? "0"
+                                : request.getAmountLost().toPlainString())));
 
         return ResponseEntity.ok(new FraudReportResponse(true, "Fraud report submitted", report.getId().toString()));
     }

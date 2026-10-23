@@ -8,13 +8,17 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.upisafeguard.core.cache.InMemoryCacheService;
+
 /**
  * 1:1 contract tests against the Python agent algorithm in
  * backend/app/services/ai_intervention_service.py.
  */
 class InterventionServiceTest {
 
-    private final InterventionService service = new InterventionService();
+    private final InterventionService service = new InterventionService(
+            new InMemoryCacheService(), new ObjectMapper());
 
     @Test
     void levelBoundariesMatchPythonThresholds() {
