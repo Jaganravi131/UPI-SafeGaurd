@@ -73,6 +73,36 @@ docker compose up core-backend postgres redis kafka ai-service
 The service calls the Python AI service at `http://localhost:8001` by default
 (`AI_SERVICE_URL`).
 
+## Production deploy (Render)
+
+Blueprint: root `render.yaml` defines `upi-safeguard-db` (free Postgres),
+`upi-safeguard-api` (legacy Python) and `upi-safeguard-core-api` (this service,
+`Dockerfile` at `core-backend/Dockerfile`, health check `/actuator/health`).
+
+One-time setup in the Render dashboard:
+
+1. Render → **New → Blueprint** → pick this repo → Render reads `render.yaml`
+   → apply. Two web services + one database are created.
+2. `upi-safeguard-core-api` → **Environment**: paste `DATABASE_URL` =
+   `jdbc:postgresql://` + the host/user/password/db from
+   `upi-safeguard-db → Connections (Internal Database URL)`, then
+   **Manual Deploy → Deploy latest commit**.
+3. Copy `JWT_SECRET_KEY` from the legacy `upi-safeguard-api` service env into
+   `upi-safeguard-core-api` so tokens issued before the flip keep validating.
+4. Smoke test, then flip the Vercel proxy (see below).
+
+Smoke test:
+
+```powershell
+curl https://upi-safeguard-core-api.onrender.com/actuator/health
+curl https://upi-safeguard-core-api.onrender.com/api/v1/admin/auth/login -X POST -H "Content-Type: application/json" -d '{\"email\":\"admin@upisafeguard.com\",\"password\":\"admin123\"}'
+```
+
+Vercel flip: change the destination in `frontend/vercel.json` from
+`https://upi-safeguard-backend.onrender.com` to
+`https://upi-safeguard-core-api.onrender.com`, push, and Vercel redeploys.
+After a soak period delete `upi-safeguard-api` in the dashboard.
+
 ## Environment variables
 
 | Variable | Default | Purpose |

@@ -1,7 +1,20 @@
-# Render Blueprint — UPI SafeGuard Backend
+# Render Blueprint — UPI SafeGuard Backends
 # https://docs.render.com/blueprint-spec
+#
+# Two services during the migration window:
+#   upi-safeguard-api       — Python FastAPI backend (legacy, retired after the flip)
+#   upi-safeguard-core-api  — Spring Boot core backend (target production backend)
+#
+# After the Vercel proxy flips to upi-safeguard-core-api and a soak period passes,
+# delete the upi-safeguard-api service from the dashboard.
+
+databases:
+  - name: upi-safeguard-db
+    databaseName: upi_safeguard
+    plan: free
 
 services:
+  # ============ Legacy Python backend (until the flip completes) ============
   - type: web
     name: upi-safeguard-api
     runtime: docker
@@ -19,6 +32,46 @@ services:
       - key: DEBUG
         value: "false"
       - key: CORS_ORIGINS
-        value: '["https://upi-safeguard.vercel.app","http://localhost:3000","http://localhost:5173"]'
+        value: '["https://upi-safe-gaurd.vercel.app","http://localhost:3000","http://localhost:5173"]'
       - key: RATE_LIMIT_PER_MINUTE
         value: "100"
+
+  # ============ Spring Boot core backend (target) ============
+  - type: web
+    name: upi-safeguard-core-api
+    runtime: docker
+    dockerfilePath: core-backend/Dockerfile
+    dockerContext: core-backend
+    plan: free
+    healthCheckPath: /actuator/health
+    envVars:
+      # PASTE in the dashboard after the first blueprint sync (sync: false):
+      # jdbc:postgresql:// + the Internal Database URL of upi-safeguard-db
+      # (dashboard → upi-safeguard-db → Connections; user/password/db from it).
+      - key: DATABASE_URL
+        sync: false
+      # MUST equal the JWT_SECRET_KEY of upi-safeguard-api so admin/user tokens
+      # issued before the flip keep validating. Copy it from that service's env.
+      - key: JWT_SECRET_KEY
+        sync: false
+      # Demo admin bootstrap (same account as the Python backend). Disable once
+      # real operator accounts exist.
+      - key: ADMIN_DEFAULT_PASSWORD
+        value: "admin123"
+      - key: APP_EXPOSE_DEMO_ADMIN
+        value: "true"
+      # Demo OTP convenience so the demo user flow keeps working until real
+      # SMTP is wired (Python prod default is false — flip when SMTP lands).
+      - key: APP_EXPOSE_DEMO_OTP
+        value: "true"
+      # Free-tier settings: no Redis/Kafka infra; memory cache, no broker.
+      - key: APP_CACHE_DRIVER
+        value: "memory"
+      - key: APP_KAFKA_ENABLED
+        value: "false"
+      # ai-service runs locally only; the shield falls back to the weighted
+      # heuristic when the risk service is unreachable.
+      - key: AI_SERVICE_URL
+        value: "http://localhost:8001"
+      - key: JPA_DDL_AUTO
+        value: "update"

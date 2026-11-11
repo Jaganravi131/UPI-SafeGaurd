@@ -1,5 +1,6 @@
 server:
-  port: 8080
+  # Render/Docker inject PORT (default 10000); local default stays 8080.
+  port: ${PORT:8080}
 
 spring:
   application:
