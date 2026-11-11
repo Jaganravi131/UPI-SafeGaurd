@@ -21,6 +21,7 @@ import com.upisafeguard.core.admin.AdminAuthSupport;
 import com.upisafeguard.core.config.JwtConfig;
 import com.upisafeguard.core.persistence.Admin;
 import com.upisafeguard.core.persistence.AdminRepository;
+import com.upisafeguard.core.persistence.ActivityLogRepository;
 import com.upisafeguard.core.persistence.FraudReportRepository;
 import com.upisafeguard.core.persistence.PaymentTransactionRepository;
 import com.upisafeguard.core.persistence.User;
@@ -50,6 +51,7 @@ class AdminControllerRbacTest {
         WalletRepository wallets = Mockito.mock(WalletRepository.class);
         FraudReportRepository fraudReports = Mockito.mock(FraudReportRepository.class);
         PaymentTransactionRepository txns = Mockito.mock(PaymentTransactionRepository.class);
+        ActivityLogRepository activityLogs = Mockito.mock(ActivityLogRepository.class);
         adminRepository = Mockito.mock(AdminRepository.class);
 
         JwtConfig jwtConfig = new JwtConfig();
@@ -84,9 +86,10 @@ class AdminControllerRbacTest {
         Mockito.when(txns.count()).thenReturn(0L);
         Mockito.when(fraudReports.count()).thenReturn(0L);
         Mockito.when(users.save(anyUser())).thenAnswer(inv -> inv.getArgument(0));
+        Mockito.when(activityLogs.count()).thenReturn(0L);
 
         mockMvc = MockMvcBuilders.standaloneSetup(
-                        new AdminController(users, wallets, fraudReports, txns, auth),
+                        new AdminController(users, wallets, fraudReports, txns, activityLogs, adminRepository, auth),
                         new WalletController(
                                 Mockito.mock(com.upisafeguard.core.wallet.WalletMoneyService.class),
                                 txns, users, wallets,

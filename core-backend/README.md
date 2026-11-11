@@ -100,10 +100,16 @@ The service calls the Python AI service at `http://localhost:8001` by default
 
 ## Known gaps / next steps
 
-- Admin console auth is now live (`/admin/auth/*` + role guards on `/admin/*`
-  and `/wallet/admin/*`, roles `super_admin`/`admin`/`analyst`/`support`,
-  bcrypt-shared with the Python backend). Remaining: `/admin/activity-logs`
-  listing, exports, and model-config endpoints from the Python surface.
+- Admin console is fully ported: auth (`/admin/auth/*`), role guards, and the
+  complete admin extras surface (`analytics/risk-distribution`,
+  `analytics/fraud-types`, `ml/performance`, `ml/models*` incl. config weights
+  and retrain, `system/health`, `system/logs`, `system/services/*/restart`,
+  `activity-logs`, `admins`, `users/export`, `fraud-reports/export`).
+- ML admin endpoints render the artifact-less fallback (versions
+  `1.0-heuristic`, `models_trained: 0`): trained `.joblib` artifacts and the
+  retraining pipeline live with the Python backend / ai-service. Retrain
+  requests therefore return `status: "queued"`, matching the Python
+  no-train-script branch.
 - Migration discipline: `ddl-auto=update` locally; production should move to
   versioned Flyway migrations.
 - Redis fail-open circuit breaker and transactional Kafka outbox (roadmap in

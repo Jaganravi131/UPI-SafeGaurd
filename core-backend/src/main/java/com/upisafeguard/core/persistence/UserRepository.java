@@ -25,4 +25,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             u.phoneNumber LIKE CONCAT('%', :query, '%')
             """)
     List<User> searchUsers(@Param("query") String query, Pageable pageable);
+
+    /** Full listing for GET /admin/users/export (SELECT ... ORDER BY created_at DESC). */
+    List<User> findAllByOrderByCreatedAtDesc();
 }

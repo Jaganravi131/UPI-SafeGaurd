@@ -21,4 +21,24 @@ public interface FraudReportRepository extends JpaRepository<FraudReport, UUID> 
     long countByScammerUpiEqualsIgnoreCase(String scammerUpi);
 
     List<FraudReport> findTop3ByScammerUpiEqualsIgnoreCaseOrderByCreatedAtDesc(String scammerUpi);
+
+    /** GET /admin/analytics/fraud-types — grouped counts + amounts, most-reported first. */
+    @Query("""
+            SELECT f.scamType AS scamType, COUNT(f.id) AS reportCount, COALESCE(SUM(f.amountLost), 0) AS totalAmount
+            FROM FraudReport f
+            GROUP BY f.scamType
+            ORDER BY COUNT(f.id) DESC
+            """)
+    List<FraudTypeCount> aggregateByScamType();
+
+    /** Full listing for GET /admin/fraud-reports/export (SELECT ... ORDER BY created_at DESC). */
+    List<FraudReport> findAllByOrderByCreatedAtDesc();
+
+    interface FraudTypeCount {
+        String getScamType();
+
+        long getReportCount();
+
+        java.math.BigDecimal getTotalAmount();
+    }
 }

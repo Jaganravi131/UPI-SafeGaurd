@@ -24,4 +24,7 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     @Query("SELECT t FROM PaymentTransaction t ORDER BY t.createdAt DESC")
     List<PaymentTransaction> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+    /** Risk-band count for GET /admin/analytics/risk-distribution (created_at >= :start). */
+    long countByRiskLevelAndCreatedAtGreaterThanEqual(String riskLevel, java.time.Instant start);
 }
