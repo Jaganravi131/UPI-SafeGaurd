@@ -12,13 +12,18 @@ public class RegisterRequestDTO {
 
     @NotBlank(message = "Phone number is required")
     @Size(min = 10, max = 15, message = "Phone number must be 10-15 digits")
+    @com.fasterxml.jackson.annotation.JsonAlias("phone_number")
     private String phoneNumber;
 
     @NotBlank(message = "Full name is required")
     @Size(min = 2, max = 100, message = "Full name must be 2-100 characters")
+    @com.fasterxml.jackson.annotation.JsonAlias("full_name")
     private String fullName;
 
+    @com.fasterxml.jackson.annotation.JsonAlias("upi_id")
     private String upiId;
+
+    @com.fasterxml.jackson.annotation.JsonAlias("firebase_uid")
     private String firebaseUid;
 
     // Getters and setters

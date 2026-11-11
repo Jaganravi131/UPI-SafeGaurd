@@ -265,7 +265,9 @@ public class AdminController {
         adminAuth.requireAdmin(authHeader);
         Pageable pageable = PageRequest.of(page, pageSize);
         Page<PaymentTransaction> transactions = transactionRepository.findByStatusIn(
-                List.of("blocked", "failed", "guardian_pending"), pageable);
+                List.of(com.upisafeguard.core.payment.PaymentStatus.BLOCKED,
+                        com.upisafeguard.core.payment.PaymentStatus.REJECTED,
+                        com.upisafeguard.core.payment.PaymentStatus.GUARDIAN_PENDING), pageable);
         return ResponseEntity.ok(transactions);
     }
 

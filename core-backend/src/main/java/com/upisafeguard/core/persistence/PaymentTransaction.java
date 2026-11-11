@@ -54,11 +54,11 @@ public class PaymentTransaction {
     @Column(name = "completed_at")
     private Instant completedAt;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "payment_risk_factors", joinColumns = @JoinColumn(name = "transaction_id"))
     private List<String> riskFactors;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "payment_model_versions", joinColumns = @JoinColumn(name = "transaction_id"))
     private List<String> modelVersions;
 
@@ -103,8 +103,10 @@ public class PaymentTransaction {
         this.idempotencyKey = idempotencyKey;
         this.status = status;
         this.reason = reason;
-        this.riskFactors = riskFactors;
-        this.modelVersions = modelVersions;
+        // Defensive copies: assigning another entity's @ElementCollection instance
+        // makes Hibernate fail with "Found shared references to a collection".
+        this.riskFactors = riskFactors == null ? null : List.copyOf(riskFactors);
+        this.modelVersions = modelVersions == null ? null : List.copyOf(modelVersions);
     }
 
     public UUID getId() { return id; }

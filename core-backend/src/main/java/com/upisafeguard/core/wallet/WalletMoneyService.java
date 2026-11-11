@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.upisafeguard.core.web.ApiRequestException;
 import com.upisafeguard.core.payment.PaymentStatus;
@@ -81,6 +82,7 @@ public class WalletMoneyService {
     }
 
     /** Lazily provision a wallet for users that registered before wallets existed. */
+    @Transactional
     public Wallet ensureWallet(User user) {
         return walletRepository.findByUserId(user.getId().toString())
                 .orElseGet(() -> walletRepository.save(new Wallet(user.getId(), BigDecimal.ZERO)));

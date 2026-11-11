@@ -26,8 +26,17 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException exception) {
+        // Surface the real field errors — the old handler hardcoded a
+        // transaction-specific message for every controller's validation failure.
+        String message = exception.getBindingResult().getFieldErrors().stream()
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .distinct()
+                .collect(java.util.stream.Collectors.joining("; "));
+        if (message.isEmpty()) {
+            message = "Validation failed";
+        }
         return ResponseEntity.badRequest()
-                .body(new ApiError("INVALID_REQUEST", "Risk assessment input is invalid"));
+                .body(new ApiError("INVALID_REQUEST", message));
     }
 
     @ExceptionHandler(InvalidAssessmentTokenException.class)

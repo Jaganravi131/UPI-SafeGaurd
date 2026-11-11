@@ -62,7 +62,7 @@ class SecurityControllerTest {
         PaymentTransaction completed = new PaymentTransaction(
                 USER_ID, "merchant@upi", BigDecimal.valueOf(2000), "key-1",
                 PaymentStatus.COMPLETED, "ok", List.of(), List.of());
-        Mockito.when(transactions.findByUserIdAndStatus(USER_ID_STR, "COMPLETED"))
+        Mockito.when(transactions.findByUserIdAndStatus(USER_ID_STR, PaymentStatus.COMPLETED))
                 .thenReturn(List.of(completed));
 
         SecurityShield shield = new SecurityShield(riskServiceClient, fraudReports);

@@ -5,6 +5,11 @@ server:
 spring:
   application:
     name: upi-safeguard-core
+  jackson:
+    # Python/FastAPI contract parity: every JSON property serializes and binds
+    # in snake_case (client.ts and the Python backend both use snake_case keys).
+    # Explicit @JsonProperty/@JsonAlias annotations still win where set.
+    property-naming-strategy: SNAKE_CASE
   datasource:
     url: ${DATABASE_URL:jdbc:h2:mem:upi_safeguard;MODE=PostgreSQL;DB_CLOSE_DELAY=-1}
     username: ${DATABASE_USERNAME:sa}
@@ -74,3 +79,11 @@ management:
     web:
       exposure:
         include: health,info
+  health:
+    # Infra health indicators are opt-in: enabled only when the matching
+    # driver/broker is actually in use. With the memory cache driver and no
+    # Kafka, health stays UP without Redis/Kafka running.
+    redis:
+      enabled: ${APP_HEALTH_REDIS:false}
+    kafka:
+      enabled: ${APP_HEALTH_KAFKA:false}

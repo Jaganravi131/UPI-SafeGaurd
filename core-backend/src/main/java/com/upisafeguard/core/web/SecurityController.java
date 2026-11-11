@@ -70,7 +70,7 @@ public class SecurityController {
                 User user = findUser(request.user_id);
                 if (user != null) {
                     List<PaymentTransaction> completed =
-                            transactionRepository.findByUserIdAndStatus(user.getId().toString(), PaymentStatus.COMPLETED.name());
+                            transactionRepository.findByUserIdAndStatus(user.getId().toString(), PaymentStatus.COMPLETED);
                     List<Double> amounts = completed.stream().map(t -> t.getAmount().doubleValue()).toList();
 
                     Map<String, Object> profile = new LinkedHashMap<>();

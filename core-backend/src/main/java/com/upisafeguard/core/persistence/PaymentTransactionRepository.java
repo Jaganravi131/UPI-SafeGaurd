@@ -17,10 +17,10 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     Page<PaymentTransaction> findByUserIdOrderByCreatedAtDesc(@Param("userId") String userId, Pageable pageable);
 
     @Query("SELECT t FROM PaymentTransaction t WHERE t.status IN :statuses")
-    Page<PaymentTransaction> findByStatusIn(@Param("statuses") List<String> statuses, Pageable pageable);
+    Page<PaymentTransaction> findByStatusIn(@Param("statuses") List<com.upisafeguard.core.payment.PaymentStatus> statuses, Pageable pageable);
 
     @Query("SELECT t FROM PaymentTransaction t WHERE t.userId = :userId AND t.status = :status")
-    List<PaymentTransaction> findByUserIdAndStatus(@Param("userId") String userId, @Param("status") String status);
+    List<PaymentTransaction> findByUserIdAndStatus(@Param("userId") String userId, @Param("status") com.upisafeguard.core.payment.PaymentStatus status);
 
     @Query("SELECT t FROM PaymentTransaction t ORDER BY t.createdAt DESC")
     List<PaymentTransaction> findAllByOrderByCreatedAtDesc(Pageable pageable);
